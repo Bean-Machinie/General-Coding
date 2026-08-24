@@ -1,0 +1,38 @@
+/**
+ * Bridge layer for shadcn-registry components (DiceUI).
+ *
+ * DiceUI's `stat` and `gauge` are written against shadcn/ui's token names.
+ * Untitled UI names its tokens differently (`--background-color-*`,
+ * `--text-color-*`, `--border-color-*`), so we map the handful of shadcn names
+ * those components actually reference onto the Untitled UI palette. That way
+ * the DiceUI components inherit the Untitled UI theme — including dark mode —
+ * instead of shipping a second, clashing palette.
+ *
+ * Only names Untitled UI does NOT already claim are defined here, so no
+ * utility class changes meaning for Untitled UI's own components.
+ */
+@theme inline {
+    --color-card: var(--color-bg-primary);
+    --color-card-foreground: var(--color-text-primary);
+
+    --color-muted: var(--color-bg-secondary);
+    --color-muted-foreground: var(--color-text-tertiary);
+
+    --color-destructive: var(--color-bg-error-solid);
+
+    --color-border: var(--color-border-secondary);
+}
+
+/**
+ * shadcn components rely on a project-wide default border colour for the bare
+ * `border` utility (Tailwind v4 otherwise falls back to `currentColor`).
+ * Untitled UI components always set their border colour explicitly, so this
+ * default only affects the registry components.
+ */
+@layer base {
+    *,
+    ::before,
+    ::after {
+        border-color: var(--color-border-secondary);
+    }
+}

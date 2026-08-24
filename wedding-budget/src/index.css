@@ -1,0 +1,8 @@
+@import "./styles/globals.css";
+
+/* Paint the app background on the document itself so overscroll and short
+   pages don't reveal a white strip, in either theme. */
+html,
+body {
+    background-color: var(--color-bg-secondary);
+}
