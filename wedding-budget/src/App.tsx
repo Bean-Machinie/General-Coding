@@ -167,7 +167,12 @@ export default function App() {
                     </div>
 
                     <PartySection scenario={active} headcount={heads} onChange={update} />
-                    <DrinksSection scenario={active} billableGuests={billable} onChange={update} />
+                    <DrinksSection
+                        scenario={active}
+                        estimate={estimate}
+                        billableGuests={billable}
+                        onChange={update}
+                    />
                     <Comparison scenario={active} estimate={estimate} onChange={update} />
                     <FoodSection scenario={active} billableGuests={billable} onChange={update} />
 

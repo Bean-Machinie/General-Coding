@@ -13,7 +13,6 @@ import { adLibitumOptions } from "@/data/catalog";
 import type { Estimate, Scenario } from "@/domain/types";
 import { adLibitumCost, consumptionCost, formatDKK, formatNumber } from "@/domain/pricing";
 import { Badge } from "@/components/base/badges/badges";
-import { Button } from "@/components/base/buttons/button";
 import { Section } from "./section";
 
 const AD_LIB_COLOR = "var(--color-brand-600)";
@@ -66,7 +65,7 @@ const CurveTooltip = ({
 };
 
 export const Comparison = ({ scenario, estimate, onChange }: Props) => {
-    const { adLib, consumption, adLibSaving, breakEvenDrinksPerHour } = estimate;
+    const { adLibSaving, breakEvenDrinksPerHour } = estimate;
 
     const data = useMemo<ChartPoint[]>(() => {
         const points: ChartPoint[] = [];
@@ -95,12 +94,11 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
     }, [scenario]);
 
     const adLibWins = adLibSaving > 0;
-    const cheapest = adLibWins ? adLib : consumption;
     const currentRate = scenario.drinks.consumption.drinksPerHour;
 
     return (
         <Section
-            title="Ad libitum vs. efter forbrug"
+            title="Hvornår betaler ad libitum sig?"
             description="Samme fest, to måder at betale for øl og vin på."
             action={
                 <Badge type="pill-color" color={adLibWins ? "success" : "blue"} size="lg">
@@ -108,96 +106,12 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
                 </Badge>
             }
         >
-            <div className="grid gap-4 sm:grid-cols-2">
-                {[
-                    {
-                        key: "adlibitum" as const,
-                        title: "Ad libitum",
-                        subtitle: `${scenario.drinks.adLib.hours} timers pakke`,
-                        cost: adLib,
-                        color: AD_LIB_COLOR,
-                    },
-                    {
-                        key: "consumption" as const,
-                        title: "Efter forbrug",
-                        subtitle: `${formatNumber(currentRate)} genstande/time i ${scenario.partyHours} t`,
-                        cost: consumption,
-                        color: CONSUMPTION_COLOR,
-                    },
-                ].map((model) => {
-                    const isActive = scenario.drinks.mode === model.key;
-                    const isCheapest = model.cost.total === cheapest.total;
-                    return (
-                        <div
-                            key={model.key}
-                            className={
-                                "rounded-xl p-4 ring-1 " +
-                                (isActive ? "bg-brand-primary ring-brand" : "bg-secondary ring-secondary")
-                            }
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <p className="flex items-center gap-2 text-sm font-semibold text-primary">
-                                        <span
-                                            className="size-2.5 rounded-full"
-                                            style={{ backgroundColor: model.color }}
-                                        />
-                                        {model.title}
-                                    </p>
-                                    <p className="text-xs text-tertiary">{model.subtitle}</p>
-                                </div>
-                                {isCheapest && (
-                                    <Badge type="pill-color" color="success" size="sm">
-                                        Billigst
-                                    </Badge>
-                                )}
-                            </div>
-                            <p className="mt-3 text-3xl font-semibold text-primary tabular-nums">
-                                {formatDKK(model.cost.total)}
-                            </p>
-                            {model.cost.pricePerDrink !== null && (
-                                <p className="mt-1 text-sm text-tertiary">
-                                    {formatDKK(model.cost.pricePerDrink)} pr. genstand ·{" "}
-                                    {formatNumber(model.cost.alcoholUnits, 0)} genstande i alt
-                                </p>
-                            )}
-                            <ul className="mt-3 space-y-1 border-t border-secondary pt-3">
-                                {model.cost.lines.map((line) => (
-                                    <li key={line.id} className="text-xs">
-                                        <div className="flex justify-between gap-3">
-                                            <span className="text-secondary">{line.label}</span>
-                                            <span className="shrink-0 font-medium text-primary tabular-nums">
-                                                {formatDKK(line.amount)}
-                                            </span>
-                                        </div>
-                                        <p className="text-tertiary">{line.detail}</p>
-                                    </li>
-                                ))}
-                            </ul>
-                            {!isActive && (
-                                <Button
-                                    size="sm"
-                                    color="secondary"
-                                    className="mt-3 w-full"
-                                    onClick={() =>
-                                        onChange({ drinks: { ...scenario.drinks, mode: model.key } })
-                                    }
-                                >
-                                    Brug denne i budgettet
-                                </Button>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* --------------------------- Verdict --------------------------- */}
-            <div className="mt-6 rounded-xl bg-secondary p-4">
+            <div className="rounded-xl bg-secondary p-4">
                 <p className="text-sm text-secondary">
                     {breakEvenDrinksPerHour === null ? (
                         <>
                             De to modeller krydser ikke hinanden med de nuværende antagelser — ad
-                            libitum-pakken er{" "}
+                            libitum er{" "}
                             <strong className="text-primary">
                                 {adLibWins ? "billigst uanset" : "dyrest uanset"}
                             </strong>{" "}
@@ -221,8 +135,8 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
                 </p>
                 <p className="mt-2 text-sm text-secondary">
                     Forskellen er{" "}
-                    <strong className="text-primary">{formatDKK(Math.abs(adLibSaving))}</strong> — det
-                    svarer til{" "}
+                    <strong className="text-primary">{formatDKK(Math.abs(adLibSaving))}</strong> —
+                    svarende til{" "}
                     <strong className="text-primary">
                         {formatDKK(Math.abs(adLibSaving) / Math.max(1, estimate.headcount))}
                     </strong>{" "}
@@ -253,9 +167,6 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
 
             {/* ---------------------------- Chart ---------------------------- */}
             <div className="mt-6">
-                <p className="text-sm font-semibold text-primary">
-                    Pris for drikkevarer efter hvor meget der drikkes
-                </p>
                 <p className="mb-3 text-xs text-tertiary">
                     Vandret akse: genstande pr. drikkende gæst pr. time. Der hvor linjerne krydser,
                     er de to modeller lige dyre.
