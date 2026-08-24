@@ -94,26 +94,58 @@ export const glassesPerBottle = {
     champagne: 7,
 } as const;
 
+/** The party length the trade figures above are quoted for. */
+export const REFERENCE_PARTY_HOURS = 6;
+
 /**
- * Relative drinking weight during hour `h` (0-indexed): double during the
- * opening hour, flat thereafter — the standard "2 drinks in the first hour,
- * then 1 per hour" surge.
+ * Relative drinking weight during hour `h` (0-indexed) of the party:
  *
- * Fixed rather than configurable: it only changes *when* drinks happen, never
- * the total, so it is invisible unless an ad libitum package expires before the
- * party ends — where it correctly makes the leftover hours cheaper than a flat
- * average would suggest.
+ *   hour 0      ×2    — the opening surge, everyone gets a drink at once
+ *   hours 1–5   ×1    — dinner, wine with the courses, speeches
+ *   hour 6+     ×0.5  — late night, dancing, people slowing down
+ *
+ * This curve does two jobs. It decides *when* the drinks are poured (which
+ * matters once an ad libitum package expires mid-party), and — via
+ * `effectiveDrinksPerGuest` — how a longer or shorter party moves the total.
+ *
+ * The late-night taper is what keeps a 12-hour party from implying twice the
+ * drinks of a 6-hour one: guests keep going, but not at dinner pace.
  */
 function hourWeight(hour: number): number {
-    return hour < 1 ? 2 : 1;
+    if (hour < 1) return 2;
+    if (hour < 6) return 1;
+    return 0.5;
+}
+
+function integrateWeight(fromHour: number, toHour: number): number {
+    let sum = 0;
+    for (let h = Math.floor(Math.max(0, fromHour)); h < toHour; h++) {
+        const overlap = Math.min(h + 1, toHour) - Math.max(h, fromHour);
+        if (overlap > 0) sum += hourWeight(h) * overlap;
+    }
+    return sum;
+}
+
+/**
+ * Scale a trade figure quoted for a standard-length party to the actual party
+ * length, along the taper curve above.
+ *
+ *   3 t → ×0.57 · 4 t → ×0.71 · 6 t → ×1 · 8 t → ×1.14 · 12 t → ×1.43
+ *
+ * So the Danish standard of 9 drinks per guest becomes ~6.4 at a 4-hour party
+ * and ~12.9 at a 12-hour one — responsive to length, but nothing like the
+ * straight multiplication a per-hour rate would give.
+ */
+export function effectiveDrinksPerGuest(atStandardLength: number, partyHours: number): number {
+    const reference = integrateWeight(0, REFERENCE_PARTY_HOURS);
+    if (reference <= 0 || partyHours <= 0) return 0;
+    return atStandardLength * (integrateWeight(0, partyHours) / reference);
 }
 
 /**
  * Of a guest's `totalPerGuest` drinks for the evening, how many fall between
- * `fromHour` and `toHour`.
- *
- * The total is fixed by the caller; this only distributes it, so a longer party
- * spreads the same drinks thinner rather than inventing new ones.
+ * `fromHour` and `toHour`. The total is fixed by the caller; this only
+ * distributes it across the party.
  */
 export function drinksInWindow(
     totalPerGuest: number,
@@ -123,14 +155,7 @@ export function drinksInWindow(
 ): number {
     if (partyHours <= 0 || toHour <= fromHour) return 0;
 
-    const integrate = (a: number, b: number) => {
-        let sum = 0;
-        for (let h = Math.floor(a); h < b; h++) {
-            const overlap = Math.min(h + 1, b) - Math.max(h, a);
-            if (overlap > 0) sum += hourWeight(h) * overlap;
-        }
-        return sum;
-    };
+    const integrate = integrateWeight;
 
     const totalWeight = integrate(0, partyHours);
     if (totalWeight <= 0) return 0;

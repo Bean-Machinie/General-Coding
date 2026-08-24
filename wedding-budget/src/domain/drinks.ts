@@ -1,5 +1,5 @@
-import { SPIRITS_SURCHARGE_PER_HOUR, adLibitumOptions, consumptionPrices, rules } from "@/data/catalog";
-import { drinksInWindow } from "@/data/consumption-presets";
+import { adLibitumOptions, consumptionPrices, rules } from "@/data/catalog";
+import { drinksInWindow, effectiveDrinksPerGuest } from "@/data/consumption-presets";
 import type { ConsumptionConfig, CostLine, DrinkCostBreakdown, Scenario } from "./types";
 import { formatDKK, formatNumber } from "./format";
 
@@ -12,13 +12,6 @@ export function blendedDrinkPrice(c: ConsumptionConfig): number {
     const wineUnit = c.priceBasis === "glass" ? wine.glass : wine.bottle / Math.max(1, c.glassesPerBottleWine);
 
     return c.beerShare * beerUnit + (1 - c.beerShare) * wineUnit;
-}
-
-/** Price of one alcoholic drink once spirits are mixed into the average. */
-export function averageAlcoholPrice(c: ConsumptionConfig, spiritsServed: boolean): number {
-    const base = blendedDrinkPrice(c);
-    if (!spiritsServed) return base;
-    return (1 - c.spiritsShare) * base + c.spiritsShare * consumptionPrices.cocktail.glass;
 }
 
 interface DrinkPopulation {
@@ -55,24 +48,20 @@ function softDrinkCostInWindow(
     toHour: number,
 ): number {
     const c = scenario.drinks.consumption;
-    const perGuest = drinksInWindow(c.softDrinksPerGuest, scenario.partyHours, fromHour, toHour);
+    const softTotal = effectiveDrinksPerGuest(c.softDrinksPerGuest, scenario.partyHours);
+    const perGuest = drinksInWindow(softTotal, scenario.partyHours, fromHour, toHour);
     return guests * perGuest * consumptionPrices.soda.glass;
 }
 
 /** Full "efter forbrug" bill: everyone settles per glass/bottle. */
 export function consumptionCost(scenario: Scenario, totalPerGuestOverride?: number): DrinkCostBreakdown {
     const c = scenario.drinks.consumption;
-    const total = totalPerGuestOverride ?? c.drinksPerGuest;
+    const total = totalPerGuestOverride ?? effectiveDrinksPerGuest(c.drinksPerGuest, scenario.partyHours);
     const hours = scenario.partyHours;
     const pop = population(scenario);
-    const spiritsServed = scenario.drinks.spiritsServed;
 
     const alcoholUnits = alcoholUnitsInWindow(scenario, total, 0, hours);
-    const spiritUnits = spiritsServed ? alcoholUnits * c.spiritsShare : 0;
-    const beerWineUnits = alcoholUnits - spiritUnits;
-
-    const beerWineCost = beerWineUnits * blendedDrinkPrice(c);
-    const spiritCost = spiritUnits * consumptionPrices.cocktail.glass;
+    const beerWineCost = alcoholUnits * blendedDrinkPrice(c);
 
     const softGuests = pop.soberAdults + pop.children;
     const soft = softDrinkCostInWindow(scenario, softGuests, 0, hours);
@@ -82,16 +71,8 @@ export function consumptionCost(scenario: Scenario, totalPerGuestOverride?: numb
         lines.push({
             id: "alcohol",
             label: "Øl og vin",
-            detail: `${formatNumber(beerWineUnits, 0)} genstande à ${formatDKK(blendedDrinkPrice(c))}`,
+            detail: `${formatNumber(alcoholUnits, 0)} genstande à ${formatDKK(blendedDrinkPrice(c))}`,
             amount: beerWineCost,
-        });
-    }
-    if (spiritCost > 0) {
-        lines.push({
-            id: "spirits",
-            label: "Drinks og spiritus",
-            detail: `${formatNumber(spiritUnits, 0)} drinks à ${formatDKK(consumptionPrices.cocktail.glass)}`,
-            amount: spiritCost,
         });
     }
     if (soft > 0) {
@@ -104,10 +85,10 @@ export function consumptionCost(scenario: Scenario, totalPerGuestOverride?: numb
     }
 
     return {
-        total: beerWineCost + spiritCost + soft,
+        total: beerWineCost + soft,
         lines,
         alcoholUnits,
-        pricePerDrink: alcoholUnits > 0 ? (beerWineCost + spiritCost) / alcoholUnits : null,
+        pricePerDrink: alcoholUnits > 0 ? beerWineCost / alcoholUnits : null,
     };
 }
 
@@ -116,8 +97,8 @@ export function consumptionCost(scenario: Scenario, totalPerGuestOverride?: numb
  * hours fall back to consumption pricing — which is what actually happens.
  */
 export function adLibitumCost(scenario: Scenario, totalPerGuestOverride?: number): DrinkCostBreakdown {
-    const { adLib, consumption: c, spiritsServed } = scenario.drinks;
-    const total = totalPerGuestOverride ?? c.drinksPerGuest;
+    const { adLib, consumption: c } = scenario.drinks;
+    const total = totalPerGuestOverride ?? effectiveDrinksPerGuest(c.drinksPerGuest, scenario.partyHours);
     const option = adLibitumOptions.find((o) => o.hours === adLib.hours) ?? adLibitumOptions[0];
     const pop = population(scenario);
 
@@ -147,17 +128,6 @@ export function adLibitumCost(scenario: Scenario, totalPerGuestOverride?: number
         amount: packageCost,
     });
 
-    let spiritsCost = 0;
-    if (spiritsServed) {
-        spiritsCost = packageHeads * option.hours * SPIRITS_SURCHARGE_PER_HOUR;
-        lines.push({
-            id: "spirits",
-            label: "Tillæg for spiritus",
-            detail: `${formatNumber(packageHeads, 1)} × ${option.hours} t × ${formatDKK(SPIRITS_SURCHARGE_PER_HOUR)}/t`,
-            amount: spiritsCost,
-        });
-    }
-
     // Guests left off the package still drink soft drinks all evening.
     const uncoveredSoftGuests = adLib.coverage === "all" ? 0 : pop.soberAdults + pop.children;
     const uncoveredSoft = softDrinkCostInWindow(scenario, uncoveredSoftGuests, 0, scenario.partyHours);
@@ -175,7 +145,7 @@ export function adLibitumCost(scenario: Scenario, totalPerGuestOverride?: number
     let overflow = 0;
     if (overflowHours > 0) {
         const overflowUnits = alcoholUnitsInWindow(scenario, total, packageHours, scenario.partyHours);
-        const overflowAlcohol = overflowUnits * averageAlcoholPrice(c, spiritsServed);
+        const overflowAlcohol = overflowUnits * blendedDrinkPrice(c);
         const overflowSoft = softDrinkCostInWindow(
             scenario,
             adLib.coverage === "all" ? pop.soberAdults + pop.children : 0,
@@ -192,7 +162,7 @@ export function adLibitumCost(scenario: Scenario, totalPerGuestOverride?: number
     }
 
     const alcoholUnits = alcoholUnitsInWindow(scenario, total, 0, scenario.partyHours);
-    const grandTotal = packageCost + spiritsCost + uncoveredSoft + overflow;
+    const grandTotal = packageCost + uncoveredSoft + overflow;
 
     return {
         total: grandTotal,

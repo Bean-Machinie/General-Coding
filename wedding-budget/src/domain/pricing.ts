@@ -15,7 +15,6 @@ import { formatDKK, formatNumber } from "./format";
 export { formatDKK, formatNumber } from "./format";
 export {
     adLibitumCost,
-    averageAlcoholPrice,
     blendedDrinkPrice,
     breakEvenDrinksPerGuest,
     consumptionCost,

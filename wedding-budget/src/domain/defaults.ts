@@ -21,13 +21,11 @@ export function createDefaultScenario(overrides: Partial<Scenario> = {}): Scenar
         trustIncludedSetup: true,
         drinks: {
             mode: "adlibitum",
-            spiritsServed: false,
             adLib: { hours: 4, coverage: "all" },
             consumption: {
                 drinkerShare: 0.85,
                 drinksPerGuest: 9,
                 beerShare: 0.45,
-                spiritsShare: 0.15,
                 wineType: "houseWhite",
                 softDrinksPerGuest: 3,
                 priceBasis: "glass",
@@ -40,7 +38,7 @@ export function createDefaultScenario(overrides: Partial<Scenario> = {}): Scenar
     };
 }
 
-const STORAGE_KEY = "skovlyst-budget:v4";
+const STORAGE_KEY = "skovlyst-budget:v5";
 
 interface PersistedState {
     scenarios: Scenario[];

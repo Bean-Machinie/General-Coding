@@ -54,22 +54,34 @@ Soft drinks default to 3 per non-drinking guest, and the 45/55 beer/wine split
 comes from the same source (4 beers against 5 glasses of wine).
 
 **Why totals rather than a rate.** Danish trade guidance is written per guest per
-course, not per hour. A per-hour rate multiplied by party length is the wrong
+course, not per hour. Multiplying a per-hour rate by party length is the wrong
 shape for it: it makes an 8-hour wedding imply ~11 drinks a head purely because
-the party runs long, when the trade figures say ~9 regardless. Party length now
-only decides *when* drinks are poured, never how many — stretching a party from
-6 to 10 hours leaves the efter-forbrug bill completely unchanged, and only moves
-ad libitum (because more hours fall outside the package).
+the party runs long, when the trade figures say ~9 for a normal wedding.
 
-Within the party, drinking is front-loaded on the standard "2 drinks in the
-first hour, then 1 per hour" rule. That is fixed rather than configurable: it
-only shifts *when* drinks happen, never the total, so it is invisible unless an
-ad libitum package expires early — where it correctly makes the leftover hours
-cheaper than an even split would suggest.
+The figures above are quoted for a **6-hour party** and scale to the actual
+length along a taper curve rather than in a straight line:
 
-**Spiritus** is asked once, as a fact about the party, because each model prices
-it differently: ad libitum charges 95 kr/person/hour for the whole package,
-efter forbrug charges 95 kr per drink actually poured.
+| Hour of the party | Weight | Why |
+| --- | --- | --- |
+| 0 | ×2 | Opening surge — everyone gets a drink at once |
+| 1–5 | ×1 | Dinner, wine with the courses, speeches |
+| 6+ | ×0.5 | Late night, dancing, guests slowing down |
+
+So the Danish standard of 9 drinks per guest becomes:
+
+| Party length | 3 t | 4 t | 6 t | 8 t | 10 t | 12 t |
+| --- | --- | --- | --- | --- | --- | --- |
+| Genstande/gæst | 5,1 | 6,4 | **9** | 10,3 | 11,6 | 12,9 |
+
+Doubling the party from 6 to 12 hours raises consumption by about 43 %, not
+100 %. The same curve also decides *when* the drinks are poured, which is what
+makes the hours after an expired ad libitum package cheaper than an even split
+would suggest. Soft drinks scale on the same curve.
+
+**Not modelled:** spirits and cocktails. The price list carries them (95 kr per
+drink, or a 95 kr/person/hour ad libitum surcharge), and `catalog.ts` still
+records both figures, but the app deliberately prices beer and wine only. Add
+them back in `drinks.ts` if the plan changes.
 
 ### Step 2 — the two models
 

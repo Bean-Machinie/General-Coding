@@ -1,21 +1,23 @@
 import { Check, InfoCircle } from "@untitledui/icons";
 import {
     CORKAGE_PER_BOTTLE,
-    SPIRITS_SURCHARGE_PER_HOUR,
     adLibitumOptions,
     consumptionPrices,
     welcomeDrinksGroup,
 } from "@/data/catalog";
-import { consumptionPresets } from "@/data/consumption-presets";
+import {
+    REFERENCE_PARTY_HOURS,
+    consumptionPresets,
+    effectiveDrinksPerGuest,
+} from "@/data/consumption-presets";
 import type { DrinkCostBreakdown, Estimate, Scenario, WineType } from "@/domain/types";
-import { averageAlcoholPrice, formatDKK, formatNumber } from "@/domain/pricing";
+import { formatDKK, formatNumber } from "@/domain/pricing";
 import { Badge } from "@/components/base/badges/badges";
 import { ButtonGroup, ButtonGroupItem } from "@/components/base/button-group/button-group";
 import { InputNumber } from "@/components/base/input/input-number";
 import { RadioButton, RadioGroup } from "@/components/base/radio-buttons/radio-buttons";
 import { Select } from "@/components/base/select/select";
 import { Slider } from "@/components/base/slider/slider";
-import { Toggle } from "@/components/base/toggle/toggle";
 import { cx } from "@/utils/cx";
 import { FieldRow, Section } from "./section";
 
@@ -171,8 +173,10 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
     const patchAdLib = (patch: Partial<typeof adLib>) => patchDrinks({ adLib: { ...adLib, ...patch } });
 
     const drinkers = Math.round(scenario.guests.adults * c.drinkerShare);
-    const unitPrice = averageAlcoholPrice(c, drinks.spiritsServed);
     const cheaper = estimate.adLibSaving > 0 ? "adlibitum" : "consumption";
+    // What the standard-length figure works out to for this party length.
+    const effectiveDrinks = effectiveDrinksPerGuest(c.drinksPerGuest, scenario.partyHours);
+    const effectiveSoft = effectiveDrinksPerGuest(c.softDrinksPerGuest, scenario.partyHours);
 
 
     const activePreset = consumptionPresets.find(
@@ -241,7 +245,11 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                 <div className="mt-4 border-t border-secondary pt-2">
                     <LabelledSlider
                         label="Genstande pr. drikkende gæst"
-                        hint="For hele festen — ikke pr. time. Dansk branchestandard er 9: 1½ glas hvidvin + 2½ glas rødvin + 1 glas dessertvin + 4 øl."
+                        hint={
+                            scenario.partyHours === REFERENCE_PARTY_HOURS
+                                ? "For hele festen. Dansk branchestandard er 9: 1½ glas hvidvin + 2½ glas rødvin + 1 glas dessertvin + 4 øl."
+                                : `Tallet gælder en ${REFERENCE_PARTY_HOURS}-timers standardfest. Jeres fest er ${scenario.partyHours} timer, så der regnes med ${formatNumber(effectiveDrinks, 1)} genstande pr. gæst.`
+                        }
                         display={`${formatNumber(c.drinksPerGuest, 1)} genstande`}
                         value={c.drinksPerGuest}
                         min={0}
@@ -273,7 +281,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
 
                     <LabelledSlider
                         label="Sodavand pr. ikke-drikkende gæst"
-                        hint={`For hele festen. Branchestandard er 3 pr. gæst = ${formatDKK(c.softDrinksPerGuest * consumptionPrices.soda.glass)} pr. gæst. Postevand er gratis med lokalelejen.`}
+                        hint={`Branchestandard er 3 ved en ${REFERENCE_PARTY_HOURS}-timers fest. Her regnes med ${formatNumber(effectiveSoft, 1)} = ${formatDKK(effectiveSoft * consumptionPrices.soda.glass)} pr. gæst. Postevand er gratis med lokalelejen.`}
                         display={`${formatNumber(c.softDrinksPerGuest, 1)} sodavand`}
                         value={c.softDrinksPerGuest}
                         min={0}
@@ -281,32 +289,6 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                         step={0.5}
                         onChange={(v) => patchConsumption({ softDrinksPerGuest: v })}
                     />
-                </div>
-
-                {/* Spirits: one party-level decision, priced differently by each model. */}
-                <div className="mt-4 border-t border-secondary pt-2">
-                    <FieldRow
-                        label="Serveres der spiritus og drinks?"
-                        hint={`Vælges én gang. Ad libitum: ${formatDKK(SPIRITS_SURCHARGE_PER_HOUR)}/person/time. Efter forbrug: ${formatDKK(consumptionPrices.cocktail.glass)} pr. drink.`}
-                    >
-                        <Toggle
-                            isSelected={drinks.spiritsServed}
-                            onChange={(v) => patchDrinks({ spiritsServed: v })}
-                            size="md"
-                        />
-                    </FieldRow>
-                    {drinks.spiritsServed && (
-                        <LabelledSlider
-                            label="Hvor stor en del af genstandene er drinks?"
-                            hint={`Gennemsnitsprisen pr. genstand bliver ${formatDKK(unitPrice)}.`}
-                            display={`${Math.round(c.spiritsShare * 100)} %`}
-                            value={Math.round(c.spiritsShare * 100)}
-                            min={0}
-                            max={60}
-                            step={5}
-                            onChange={(v) => patchConsumption({ spiritsShare: v / 100 })}
-                        />
-                    )}
                 </div>
 
                 <div className="mt-4 grid gap-4 border-t border-secondary pt-3 sm:grid-cols-2">
