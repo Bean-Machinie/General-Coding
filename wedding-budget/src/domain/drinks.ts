@@ -1,15 +1,46 @@
 import { adLibitumOptions, consumptionPrices, rules } from "@/data/catalog";
 import { drinksInWindow, effectiveDrinksPerGuest } from "@/data/consumption-presets";
-import type { ConsumptionConfig, CostLine, DrinkCostBreakdown, Scenario } from "./types";
+import type { ConsumptionConfig, CostLine, DrinkCostBreakdown, Scenario, WineType } from "./types";
 import { formatDKK, formatNumber } from "./format";
+
+/** A Danish standard drink contains 12 g of pure alcohol (Sundhedsstyrelsen). */
+const STANDARD_DRINK_GRAMS = 12;
+/** Density of pure ethanol at 20 °C (NIST). */
+const ETHANOL_GRAMS_PER_MILLILITRE = 0.789;
+
+/** Convert a container's volume and alcohol percentage to Danish standard drinks. */
+export function standardDrinksInVolume(litres: number, alcoholPercent: number): number {
+    const pureAlcoholMillilitres = Math.max(0, litres) * 1000 * (Math.max(0, alcoholPercent) / 100);
+    return (pureAlcoholMillilitres * ETHANOL_GRAMS_PER_MILLILITRE) / STANDARD_DRINK_GRAMS;
+}
+
+/** Standard drinks in the venue's fixed 1.5 L beer pitcher. */
+export function standardDrinksInBeerPitcher(): number {
+    return standardDrinksInVolume(
+        consumptionPrices.beer.pitcherLitres,
+        consumptionPrices.beer.defaultAlcoholPercent,
+    );
+}
+
+/** Standard drinks in the selected fixed 0.75 L house-wine bottle. */
+export function standardDrinksInWineBottle(wineType: WineType): number {
+    const wine = consumptionPrices[wineType];
+    return standardDrinksInVolume(wine.bottleLitres, wine.defaultAlcoholPercent);
+}
 
 /** Price of one beer-or-wine drink, blended across the chosen beer/wine split. */
 export function blendedDrinkPrice(c: ConsumptionConfig): number {
     const beer = consumptionPrices.beer;
     const wine = consumptionPrices[c.wineType];
 
-    const beerUnit = c.priceBasis === "glass" ? beer.glass : beer.bottle / Math.max(1, c.glassesPerBottleBeer);
-    const wineUnit = c.priceBasis === "glass" ? wine.glass : wine.bottle / Math.max(1, c.glassesPerBottleWine);
+    const beerUnit =
+        c.priceBasis === "glass"
+            ? beer.glass
+            : beer.pitcher / Math.max(0.1, standardDrinksInBeerPitcher());
+    const wineUnit =
+        c.priceBasis === "glass"
+            ? wine.glass
+            : wine.bottle / Math.max(0.1, standardDrinksInWineBottle(c.wineType));
 
     return c.beerShare * beerUnit + (1 - c.beerShare) * wineUnit;
 }

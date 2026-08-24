@@ -11,6 +11,7 @@ import {
     effectiveDrinksPerGuest,
 } from "@/data/consumption-presets";
 import type { DrinkCostBreakdown, Estimate, Scenario, WineType } from "@/domain/types";
+import { standardDrinksInBeerPitcher, standardDrinksInWineBottle } from "@/domain/drinks";
 import { formatDKK, formatNumber } from "@/domain/pricing";
 import { Badge } from "@/components/base/badges/badges";
 import { ButtonGroup, ButtonGroupItem } from "@/components/base/button-group/button-group";
@@ -177,7 +178,9 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
     // What the standard-length figure works out to for this party length.
     const effectiveDrinks = effectiveDrinksPerGuest(c.drinksPerGuest, scenario.partyHours);
     const effectiveSoft = effectiveDrinksPerGuest(c.softDrinksPerGuest, scenario.partyHours);
-
+    const selectedWine = consumptionPrices[c.wineType];
+    const wineBottleUnits = standardDrinksInWineBottle(c.wineType);
+    const beerPitcherUnits = standardDrinksInBeerPitcher();
 
     const activePreset = consumptionPresets.find(
         (p) =>
@@ -319,7 +322,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                 Glaspris
                             </ButtonGroupItem>
                             <ButtonGroupItem id="bottle" className="flex-1 justify-center">
-                                Flaskepris
+                                Kande-/flaskepris
                             </ButtonGroupItem>
                         </ButtonGroup>
                     </div>
@@ -327,22 +330,24 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
 
                 {c.priceBasis === "bottle" && (
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <InputNumber
-                            label="Glas pr. flaske vin"
-                            hint={`Flaske ${formatDKK(consumptionPrices.houseWhite.bottle)}`}
-                            minValue={1}
-                            maxValue={12}
-                            value={c.glassesPerBottleWine}
-                            onChange={(v) => patchConsumption({ glassesPerBottleWine: Number.isNaN(v) ? 5 : v })}
-                        />
-                        <InputNumber
-                            label="Glas pr. flaske øl"
-                            hint={`Flaske ${formatDKK(consumptionPrices.beer.bottle)}`}
-                            minValue={1}
-                            maxValue={12}
-                            value={c.glassesPerBottleBeer}
-                            onChange={(v) => patchConsumption({ glassesPerBottleBeer: Number.isNaN(v) ? 4 : v })}
-                        />
+                        <div className="rounded-lg bg-primary px-3 py-2.5 ring-1 ring-secondary">
+                            <p className="text-sm font-medium text-secondary">Vinflaske</p>
+                            <p className="mt-0.5 text-sm font-semibold text-primary tabular-nums">
+                                {formatNumber(selectedWine.bottleLitres, 2)} L · {formatDKK(selectedWine.bottle)}
+                            </p>
+                            <p className="text-xs text-tertiary">
+                                {formatNumber(selectedWine.defaultAlcoholPercent, 1)} % vol. = ca. {formatNumber(wineBottleUnits, 1)} genstande
+                            </p>
+                        </div>
+                        <div className="rounded-lg bg-primary px-3 py-2.5 ring-1 ring-secondary">
+                            <p className="text-sm font-medium text-secondary">Ølkande</p>
+                            <p className="mt-0.5 text-sm font-semibold text-primary tabular-nums">
+                                {formatNumber(consumptionPrices.beer.pitcherLitres, 1)} L · {formatDKK(consumptionPrices.beer.pitcher)}
+                            </p>
+                            <p className="text-xs text-tertiary">
+                                {formatNumber(consumptionPrices.beer.defaultAlcoholPercent, 1)} % vol. = ca. {formatNumber(beerPitcherUnits, 1)} genstande
+                            </p>
+                        </div>
                     </div>
                 )}
             </div>

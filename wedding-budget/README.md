@@ -53,6 +53,16 @@ rate per hour. Sources are cited in `src/data/consumption-presets.ts`.
 Soft drinks default to 3 per non-drinking guest, and the 45/55 beer/wine split
 comes from the same source (4 beers against 5 glasses of wine).
 
+When full-unit pricing is selected, both beer and wine are converted from their
+container volume and alcohol percentage. Beer is billed as a **1.5 L pitcher
+for 275 kr**; at the default 5% it contains about 4.9 standard drinks. Wine is
+billed as a **0.75 L bottle for 325 kr**; at the assumed 12.5% it contains about
+6.2 standard drinks. The percentages are fixed catalog assumptions rather than
+user settings, because the price list presents each one as a known sales unit.
+
+The standard-drink conversion uses [Sundhedsstyrelsen's definition of 12 g of
+pure alcohol per Danish standard drink](https://www.sst.dk/vidensbase/forebyggelse/alkohol/anbefalinger-om-alkohol).
+
 **Why totals rather than a rate.** Danish trade guidance is written per guest per
 course, not per hour. Multiplying a per-hour rate by party length is the wrong
 shape for it: it makes an 8-hour wedding imply ~11 drinks a head purely because

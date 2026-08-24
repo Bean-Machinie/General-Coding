@@ -34,10 +34,8 @@ export interface ConsumptionConfig {
     wineType: WineType;
     /** Soft drinks per non-drinking guest across the whole party. */
     softDrinksPerGuest: number;
-    /** Settle by the glass or by the bottle. */
+    /** Settle by the glass or by the full sales unit (wine bottle / beer pitcher). */
     priceBasis: PriceBasis;
-    glassesPerBottleWine: number;
-    glassesPerBottleBeer: number;
 }
 
 export interface DrinksConfig {

@@ -217,15 +217,45 @@ export const SPIRITS_SURCHARGE_PER_HOUR = 95;
 
 /**
  * "Efter forbrug" unit prices — what you pay when you settle by consumption
- * instead of buying a package. Glass price first, bottle price second where
- * the list gives both.
+ * instead of buying a package. Glass price first, then the full sales unit
+ * where the list gives both (a 1.5 L pitcher for beer, bottles for wine).
  */
 export const consumptionPrices = {
-    beer: { name: "Håndbrygget øl", glass: 65, bottle: 275 },
-    houseWhite: { name: "Husets hvidvin", glass: 85, bottle: 325 },
-    houseRose: { name: "Husets rosévin", glass: 85, bottle: 325 },
-    houseRed: { name: "Husets rødvin", glass: 90, bottle: 325 },
-    housePort: { name: "Husets portvin", glass: 85, bottle: 495 },
+    beer: {
+        name: "Håndbrygget øl",
+        glass: 65,
+        pitcher: 275,
+        pitcherLitres: 1.5,
+        defaultAlcoholPercent: 5,
+    },
+    houseWhite: {
+        name: "Husets hvidvin",
+        glass: 85,
+        bottle: 325,
+        bottleLitres: 0.75,
+        defaultAlcoholPercent: 12.5,
+    },
+    houseRose: {
+        name: "Husets rosévin",
+        glass: 85,
+        bottle: 325,
+        bottleLitres: 0.75,
+        defaultAlcoholPercent: 12.5,
+    },
+    houseRed: {
+        name: "Husets rødvin",
+        glass: 90,
+        bottle: 325,
+        bottleLitres: 0.75,
+        defaultAlcoholPercent: 12.5,
+    },
+    housePort: {
+        name: "Husets portvin",
+        glass: 85,
+        bottle: 495,
+        bottleLitres: 0.75,
+        defaultAlcoholPercent: 20,
+    },
     soda: { name: "Alle sodavand", glass: 40, bottle: null },
     juice: { name: "Øko. rabarber eller æblemost", glass: 45, bottle: null },
     rokkedysse: { name: "Rokkedyssegårdsaft", glass: 48, bottle: null },

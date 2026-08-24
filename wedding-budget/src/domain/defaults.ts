@@ -29,8 +29,6 @@ export function createDefaultScenario(overrides: Partial<Scenario> = {}): Scenar
                 wineType: "houseWhite",
                 softDrinksPerGuest: 3,
                 priceBasis: "glass",
-                glassesPerBottleWine: 6,
-                glassesPerBottleBeer: 4,
             },
             ownWineBottles: 0,
         },
