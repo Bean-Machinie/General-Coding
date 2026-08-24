@@ -6,8 +6,7 @@ import {
     consumptionPrices,
     welcomeDrinksGroup,
 } from "@/data/catalog";
-import { consumptionPresets, consumptionProfiles } from "@/data/consumption-presets";
-import type { ConsumptionProfile } from "@/data/consumption-presets";
+import { consumptionPresets } from "@/data/consumption-presets";
 import type { DrinkCostBreakdown, Estimate, Scenario, WineType } from "@/domain/types";
 import { averageAlcoholPrice, formatDKK, formatNumber } from "@/domain/pricing";
 import { Badge } from "@/components/base/badges/badges";
@@ -113,6 +112,7 @@ const ModelHeader = ({
     cost,
     chosen,
     isCheapest,
+    billableGuests,
 }: {
     id: "adlibitum" | "consumption";
     title: string;
@@ -120,6 +120,7 @@ const ModelHeader = ({
     cost: DrinkCostBreakdown;
     chosen: boolean;
     isCheapest: boolean;
+    billableGuests: number;
 }) => (
     <div className={cx("border-b border-secondary px-4 py-3", chosen && "bg-brand-primary")}>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -143,8 +144,15 @@ const ModelHeader = ({
                 </Badge>
             )}
         </div>
+        {/* Both models divided by the same headcount, so the two cards can be
+            compared directly — this is the number that explains the winner. */}
+        {billableGuests > 0 && (
+            <p className="mt-0.5 text-sm font-medium text-secondary">
+                {formatDKK(cost.total / billableGuests)} pr. betalende gæst
+            </p>
+        )}
         {cost.pricePerDrink !== null && (
-            <p className="mt-0.5 text-sm text-tertiary">
+            <p className="text-sm text-tertiary">
                 {formatDKK(cost.pricePerDrink)} pr. genstand · {formatNumber(cost.alcoholUnits, 0)}{" "}
                 genstande i alt
             </p>
@@ -165,11 +173,11 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
     const drinkers = Math.round(scenario.guests.adults * c.drinkerShare);
     const unitPrice = averageAlcoholPrice(c, drinks.spiritsServed);
     const cheaper = estimate.adLibSaving > 0 ? "adlibitum" : "consumption";
-    const drinksPerGuest = c.drinksPerHour * scenario.partyHours;
+
 
     const activePreset = consumptionPresets.find(
         (p) =>
-            Math.abs(p.drinksPerHour - c.drinksPerHour) < 0.01 &&
+            Math.abs(p.drinksPerGuest - c.drinksPerGuest) < 0.01 &&
             Math.abs(p.drinkerShare - c.drinkerShare) < 0.01 &&
             Math.abs(p.beerShare - c.beerShare) < 0.01,
     );
@@ -197,7 +205,8 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                 type="button"
                                 onClick={() =>
                                     patchConsumption({
-                                        drinksPerHour: preset.drinksPerHour,
+                                        drinksPerGuest: preset.drinksPerGuest,
+                                        softDrinksPerGuest: preset.softDrinksPerGuest,
                                         drinkerShare: preset.drinkerShare,
                                         beerShare: preset.beerShare,
                                     })
@@ -213,7 +222,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                 {isActive && <Check className="size-3.5" />}
                                 {preset.label}
                                 <span className={cx("tabular-nums", isActive ? "text-white" : "text-tertiary")}>
-                                    {formatNumber(preset.drinksPerHour)}/t
+{formatNumber(preset.drinksPerGuest, 0)} stk.
                                 </span>
                             </button>
                         );
@@ -231,14 +240,14 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
 
                 <div className="mt-4 border-t border-secondary pt-2">
                     <LabelledSlider
-                        label="Genstande pr. drikkende gæst pr. time"
-                        hint={`Svarer til ${formatNumber(drinksPerGuest, 1)} genstande hver over ${scenario.partyHours} timer.`}
-                        display={`${formatNumber(c.drinksPerHour)} /time`}
-                        value={c.drinksPerHour}
+                        label="Genstande pr. drikkende gæst"
+                        hint="For hele festen — ikke pr. time. Dansk branchestandard er 9: 1½ glas hvidvin + 2½ glas rødvin + 1 glas dessertvin + 4 øl."
+                        display={`${formatNumber(c.drinksPerGuest, 1)} genstande`}
+                        value={c.drinksPerGuest}
                         min={0}
-                        max={4}
-                        step={0.1}
-                        onChange={(v) => patchConsumption({ drinksPerHour: v })}
+                        max={20}
+                        step={0.5}
+                        onChange={(v) => patchConsumption({ drinksPerGuest: v })}
                     />
 
                     <LabelledSlider
@@ -263,40 +272,15 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                     />
 
                     <LabelledSlider
-                        label="Sodavand pr. ikke-drikkende gæst pr. time"
-                        hint={`${formatDKK(consumptionPrices.soda.glass)} pr. sodavand. Postevand er gratis med lokalelejen.`}
-                        display={`${formatNumber(c.softDrinksPerHour)} /time`}
-                        value={c.softDrinksPerHour}
+                        label="Sodavand pr. ikke-drikkende gæst"
+                        hint={`For hele festen. Branchestandard er 3 pr. gæst = ${formatDKK(c.softDrinksPerGuest * consumptionPrices.soda.glass)} pr. gæst. Postevand er gratis med lokalelejen.`}
+                        display={`${formatNumber(c.softDrinksPerGuest, 1)} sodavand`}
+                        value={c.softDrinksPerGuest}
                         min={0}
-                        max={4}
-                        step={0.25}
-                        onChange={(v) => patchConsumption({ softDrinksPerHour: v })}
+                        max={10}
+                        step={0.5}
+                        onChange={(v) => patchConsumption({ softDrinksPerGuest: v })}
                     />
-                </div>
-
-                <div className="mt-4 border-t border-secondary pt-3">
-                    <p className="mb-1.5 text-sm font-medium text-secondary">Tempo hen over aftenen</p>
-                    <ButtonGroup
-                        selectedKeys={[c.profile]}
-                        selectionMode="single"
-                        onSelectionChange={(keys) => {
-                            const next = [...keys][0];
-                            if (next === "even" || next === "frontloaded")
-                                patchConsumption({ profile: next as ConsumptionProfile });
-                        }}
-                        className="w-full"
-                    >
-                        {consumptionProfiles.map((p) => (
-                            <ButtonGroupItem key={p.id} id={p.id} className="flex-1 justify-center">
-                                {p.label}
-                            </ButtonGroupItem>
-                        ))}
-                    </ButtonGroup>
-                    <p className="mt-1.5 text-xs text-tertiary">
-                        {consumptionProfiles.find((p) => p.id === c.profile)?.hint} Ændrer ikke det
-                        samlede antal genstande — kun hvornår de drikkes, hvilket betyder noget når
-                        ad libitum-pakken udløber før festen.
-                    </p>
                 </div>
 
                 {/* Spirits: one party-level decision, priced differently by each model. */}
@@ -414,6 +398,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                 cost={estimate.adLib}
                                 chosen={drinks.mode === "adlibitum"}
                                 isCheapest={cheaper === "adlibitum"}
+                                billableGuests={billableGuests}
                             />
 
                             <div className="space-y-4 px-4 py-3">
@@ -509,6 +494,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                 cost={estimate.consumption}
                                 chosen={drinks.mode === "consumption"}
                                 isCheapest={cheaper === "consumption"}
+                                billableGuests={billableGuests}
                             />
 
                             <div className="space-y-4 px-4 py-3">
@@ -529,7 +515,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                     <p className="text-xs font-medium text-secondary">Sådan regnes den</p>
                                     <ul className="mt-1 space-y-1 text-xs text-tertiary">
                                         <li>
-                                            {drinkers} drikkende × {formatNumber(drinksPerGuest, 1)}{" "}
+                                            {drinkers} drikkende × {formatNumber(c.drinksPerGuest, 1)}{" "}
                                             genstande hver ={" "}
                                             {formatNumber(estimate.consumption.alcoholUnits, 0)} genstande
                                         </li>

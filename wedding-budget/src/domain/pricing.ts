@@ -9,7 +9,7 @@ import {
     welcomeDrinksGroup,
 } from "@/data/catalog";
 import type { CostCategory, CostLine, Estimate, GuestCounts, Scenario } from "./types";
-import { adLibitumCost, breakEvenRate, consumptionCost } from "./drinks";
+import { adLibitumCost, breakEvenDrinksPerGuest, consumptionCost } from "./drinks";
 import { formatDKK, formatNumber } from "./format";
 
 export { formatDKK, formatNumber } from "./format";
@@ -17,7 +17,7 @@ export {
     adLibitumCost,
     averageAlcoholPrice,
     blendedDrinkPrice,
-    breakEvenRate,
+    breakEvenDrinksPerGuest,
     consumptionCost,
     population,
 } from "./drinks";
@@ -200,6 +200,20 @@ export function estimate(scenario: Scenario): Estimate {
         );
     }
 
+    // The package is priced per head, so it is completely unaffected by how much
+    // people drink. That is easy to mistake for a broken slider, so say it.
+    const soberShare = 1 - scenario.drinks.consumption.drinkerShare;
+    if (
+        scenario.drinks.mode === "adlibitum" &&
+        scenario.drinks.adLib.coverage === "all" &&
+        soberShare >= 0.2
+    ) {
+        const sober = Math.round(scenario.guests.adults * soberShare);
+        warnings.push(
+            `${sober} af de voksne drikker ikke alkohol, men ad libitum-pakken købes til alle — prisen falder derfor ikke når I skruer ned for forbruget. Prøv «kun dem der drikker», eller skift til efter forbrug.`,
+        );
+    }
+
     const total = categories.reduce((sum, c) => sum + c.amount, 0);
 
     return {
@@ -212,7 +226,7 @@ export function estimate(scenario: Scenario): Estimate {
         adLib,
         consumption,
         adLibSaving: consumption.total - adLib.total,
-        breakEvenDrinksPerHour: breakEvenRate(scenario),
+        breakEvenDrinksPerGuest: breakEvenDrinksPerGuest(scenario),
         warnings,
     };
 }

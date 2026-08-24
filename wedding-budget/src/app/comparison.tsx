@@ -45,7 +45,7 @@ const CurveTooltip = ({
     return (
         <div className="rounded-lg bg-primary px-3 py-2 text-sm shadow-lg ring-1 ring-secondary">
             <p className="font-semibold text-primary">
-                {formatNumber(Number(label))} genstande/time
+                {formatNumber(Number(label), 1)} genstande pr. gæst
             </p>
             <p className="mt-1 flex items-center justify-between gap-4">
                 <span className="text-tertiary">Ad libitum</span>
@@ -65,16 +65,16 @@ const CurveTooltip = ({
 };
 
 export const Comparison = ({ scenario, estimate, onChange }: Props) => {
-    const { adLibSaving, breakEvenDrinksPerHour } = estimate;
+    const { adLibSaving, breakEvenDrinksPerGuest } = estimate;
 
     const data = useMemo<ChartPoint[]>(() => {
         const points: ChartPoint[] = [];
-        for (let rate = 0; rate <= 4.0001; rate += 0.1) {
-            const r = Math.round(rate * 10) / 10;
+        for (let drinks = 0; drinks <= 20.0001; drinks += 0.5) {
+            const d = Math.round(drinks * 2) / 2;
             points.push({
-                rate: r,
-                adLib: adLibitumCost(scenario, r).total,
-                consumption: consumptionCost(scenario, r).total,
+                rate: d,
+                adLib: adLibitumCost(scenario, d).total,
+                consumption: consumptionCost(scenario, d).total,
             });
         }
         return points;
@@ -94,7 +94,7 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
     }, [scenario]);
 
     const adLibWins = adLibSaving > 0;
-    const currentRate = scenario.drinks.consumption.drinksPerHour;
+    const currentDrinks = scenario.drinks.consumption.drinksPerGuest;
 
     return (
         <Section
@@ -109,7 +109,7 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
         >
             <div className="rounded-xl bg-secondary p-4">
                 <p className="text-sm text-secondary">
-                    {breakEvenDrinksPerHour === null ? (
+                    {breakEvenDrinksPerGuest === null ? (
                         <>
                             De to modeller krydser ikke hinanden med de nuværende antagelser — ad
                             libitum er{" "}
@@ -120,17 +120,19 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
                         </>
                     ) : (
                         <>
-                            Ad libitum begynder at betale sig fra{" "}
+                            Ad libitum begynder at betale sig når hver drikkende gæst når op på{" "}
                             <strong className="text-primary">
-                                {formatNumber(breakEvenDrinksPerHour, 2)} genstande
+                                {formatNumber(breakEvenDrinksPerGuest, 1)} genstande
                             </strong>{" "}
-                            pr. drikkende gæst pr. time. I regner lige nu med{" "}
-                            <strong className="text-primary">{formatNumber(currentRate)}</strong> —
-                            altså{" "}
+                            hen over festen. I regner lige nu med{" "}
+                            <strong className="text-primary">
+                                {formatNumber(currentDrinks, 1)} genstande
+                            </strong>{" "}
+                            hver — altså{" "}
                             <strong className={adLibWins ? "text-success-primary" : "text-primary"}>
                                 {adLibWins ? "over" : "under"} grænsen
                             </strong>
-                            .
+                            . Til sammenligning er dansk branchestandard 9.
                         </>
                     )}
                 </p>
@@ -169,8 +171,8 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
             {/* ---------------------------- Chart ---------------------------- */}
             <div className="mt-6">
                 <p className="mb-3 text-xs text-tertiary">
-                    Vandret akse: genstande pr. drikkende gæst pr. time. Der hvor linjerne krydser,
-                    er de to modeller lige dyre.
+                    Vandret akse: genstande pr. drikkende gæst hen over hele festen. Der hvor
+                    linjerne krydser, er de to modeller lige dyre.
                 </p>
                 <div className="h-80 w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -179,13 +181,13 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
                             <XAxis
                                 dataKey="rate"
                                 type="number"
-                                domain={[0, 4]}
-                                ticks={[0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]}
-                                tickFormatter={(v: number) => formatNumber(v)}
+                                domain={[0, 20]}
+                                ticks={[0, 2, 4, 6, 8, 9, 10, 12, 14, 16, 18, 20]}
+                                tickFormatter={(v: number) => formatNumber(v, 0)}
                                 stroke="var(--color-text-tertiary)"
                                 fontSize={12}
                                 label={{
-                                    value: "Genstande pr. drikkende gæst pr. time",
+                                    value: "Genstande pr. drikkende gæst (hele festen)",
                                     position: "insideBottom",
                                     offset: -14,
                                     fill: "var(--color-text-tertiary)",
@@ -199,13 +201,13 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
                                 tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
                             />
                             <Tooltip content={<CurveTooltip />} />
-                            {breakEvenDrinksPerHour !== null && breakEvenDrinksPerHour <= 4 && (
+                            {breakEvenDrinksPerGuest !== null && breakEvenDrinksPerGuest <= 20 && (
                                 <ReferenceLine
-                                    x={breakEvenDrinksPerHour}
+                                    x={breakEvenDrinksPerGuest}
                                     stroke="var(--color-text-tertiary)"
                                     strokeDasharray="4 4"
                                     label={{
-                                        value: `Balancepunkt ${formatNumber(breakEvenDrinksPerHour, 2)}`,
+                                        value: `Balancepunkt ${formatNumber(breakEvenDrinksPerGuest, 1)}`,
                                         position: "insideTopLeft",
                                         fill: "var(--color-text-tertiary)",
                                         fontSize: 11,
@@ -213,7 +215,7 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
                                 />
                             )}
                             <ReferenceLine
-                                x={Math.min(4, currentRate)}
+                                x={Math.min(20, currentDrinks)}
                                 stroke="var(--color-text-primary)"
                                 strokeWidth={1.5}
                                 label={{

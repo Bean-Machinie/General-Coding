@@ -1,5 +1,4 @@
 import type { ItemId } from "@/data/catalog";
-import type { ConsumptionProfile } from "@/data/consumption-presets";
 
 export type DrinkMode = "adlibitum" | "consumption";
 
@@ -28,15 +27,13 @@ export interface AdLibConfig {
 export interface ConsumptionConfig {
     /** Share of adults who drink alcohol, 0–1. */
     drinkerShare: number;
-    /** Average alcoholic drinks per drinking adult per hour. */
-    drinksPerHour: number;
+    /** Alcoholic drinks per drinking adult across the whole party. */
+    drinksPerGuest: number;
     /** Share of those drinks that are beer, 0–1. The rest is wine. */
     beerShare: number;
     wineType: WineType;
-    /** Soft drinks per non-drinking guest per hour. */
-    softDrinksPerHour: number;
-    /** How the drinking is spread across the evening. */
-    profile: ConsumptionProfile;
+    /** Soft drinks per non-drinking guest across the whole party. */
+    softDrinksPerGuest: number;
     /** Of the alcoholic drinks, the share that are spirits/cocktails. */
     spiritsShare: number;
     /** Settle by the glass or by the bottle. */
@@ -119,9 +116,9 @@ export interface Estimate {
     /** Positive = ad libitum is the cheaper option, by this many kroner. */
     adLibSaving: number;
     /**
-     * Drinks per drinker per hour at which both models cost the same.
+     * Drinks per drinking guest at which both models cost the same.
      * `null` when they never cross (e.g. nobody drinks).
      */
-    breakEvenDrinksPerHour: number | null;
+    breakEvenDrinksPerGuest: number | null;
     warnings: string[];
 }

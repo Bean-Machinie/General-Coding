@@ -1,6 +1,5 @@
-import { SPIRITS_SURCHARGE_PER_HOUR, adLibitumOptions, consumptionPrices } from "@/data/catalog";
+import { SPIRITS_SURCHARGE_PER_HOUR, adLibitumOptions, consumptionPrices, rules } from "@/data/catalog";
 import { drinksInWindow } from "@/data/consumption-presets";
-import { rules } from "@/data/catalog";
 import type { ConsumptionConfig, CostLine, DrinkCostBreakdown, Scenario } from "./types";
 import { formatDKK, formatNumber } from "./format";
 
@@ -19,8 +18,7 @@ export function blendedDrinkPrice(c: ConsumptionConfig): number {
 export function averageAlcoholPrice(c: ConsumptionConfig, spiritsServed: boolean): number {
     const base = blendedDrinkPrice(c);
     if (!spiritsServed) return base;
-    const share = c.spiritsShare;
-    return (1 - share) * base + share * consumptionPrices.cocktail.glass;
+    return (1 - c.spiritsShare) * base + c.spiritsShare * consumptionPrices.cocktail.glass;
 }
 
 interface DrinkPopulation {
@@ -41,34 +39,35 @@ export function population(scenario: Scenario): DrinkPopulation {
 /** Alcoholic drinks poured for the whole group between two hour marks. */
 function alcoholUnitsInWindow(
     scenario: Scenario,
-    rate: number,
+    totalPerGuest: number,
     fromHour: number,
     toHour: number,
 ): number {
-    const pop = population(scenario);
-    const perDrinker = drinksInWindow(
-        scenario.drinks.consumption.profile,
-        rate,
-        scenario.partyHours,
-        fromHour,
-        toHour,
-    );
-    return pop.drinkers * perDrinker;
+    const perDrinker = drinksInWindow(totalPerGuest, scenario.partyHours, fromHour, toHour);
+    return population(scenario).drinkers * perDrinker;
 }
 
-function softDrinkCost(guests: number, hours: number, c: ConsumptionConfig): number {
-    return guests * hours * c.softDrinksPerHour * consumptionPrices.soda.glass;
+/** Soft drinks for a group between two hour marks, on the same distribution. */
+function softDrinkCostInWindow(
+    scenario: Scenario,
+    guests: number,
+    fromHour: number,
+    toHour: number,
+): number {
+    const c = scenario.drinks.consumption;
+    const perGuest = drinksInWindow(c.softDrinksPerGuest, scenario.partyHours, fromHour, toHour);
+    return guests * perGuest * consumptionPrices.soda.glass;
 }
 
 /** Full "efter forbrug" bill: everyone settles per glass/bottle. */
-export function consumptionCost(scenario: Scenario, ratePerHourOverride?: number): DrinkCostBreakdown {
+export function consumptionCost(scenario: Scenario, totalPerGuestOverride?: number): DrinkCostBreakdown {
     const c = scenario.drinks.consumption;
-    const rate = ratePerHourOverride ?? c.drinksPerHour;
+    const total = totalPerGuestOverride ?? c.drinksPerGuest;
     const hours = scenario.partyHours;
     const pop = population(scenario);
     const spiritsServed = scenario.drinks.spiritsServed;
 
-    const alcoholUnits = alcoholUnitsInWindow(scenario, rate, 0, hours);
+    const alcoholUnits = alcoholUnitsInWindow(scenario, total, 0, hours);
     const spiritUnits = spiritsServed ? alcoholUnits * c.spiritsShare : 0;
     const beerWineUnits = alcoholUnits - spiritUnits;
 
@@ -76,7 +75,7 @@ export function consumptionCost(scenario: Scenario, ratePerHourOverride?: number
     const spiritCost = spiritUnits * consumptionPrices.cocktail.glass;
 
     const softGuests = pop.soberAdults + pop.children;
-    const soft = softDrinkCost(softGuests, hours, c);
+    const soft = softDrinkCostInWindow(scenario, softGuests, 0, hours);
 
     const lines: CostLine[] = [];
     if (beerWineCost > 0) {
@@ -99,14 +98,13 @@ export function consumptionCost(scenario: Scenario, ratePerHourOverride?: number
         lines.push({
             id: "soft",
             label: "Sodavand til ikke-drikkende",
-            detail: `${formatNumber(softGuests, 0)} gæster × ${formatNumber(c.softDrinksPerHour)} /time × ${hours} t à ${formatDKK(consumptionPrices.soda.glass)}`,
+            detail: `${formatNumber(softGuests, 0)} gæster × ${formatNumber(c.softDrinksPerGuest, 1)} sodavand à ${formatDKK(consumptionPrices.soda.glass)}`,
             amount: soft,
         });
     }
 
-    const total = beerWineCost + spiritCost + soft;
     return {
-        total,
+        total: beerWineCost + spiritCost + soft,
         lines,
         alcoholUnits,
         pricePerDrink: alcoholUnits > 0 ? (beerWineCost + spiritCost) / alcoholUnits : null,
@@ -117,9 +115,9 @@ export function consumptionCost(scenario: Scenario, ratePerHourOverride?: number
  * Ad libitum bill. If the package is shorter than the party, the remaining
  * hours fall back to consumption pricing — which is what actually happens.
  */
-export function adLibitumCost(scenario: Scenario, ratePerHourOverride?: number): DrinkCostBreakdown {
+export function adLibitumCost(scenario: Scenario, totalPerGuestOverride?: number): DrinkCostBreakdown {
     const { adLib, consumption: c, spiritsServed } = scenario.drinks;
-    const rate = ratePerHourOverride ?? c.drinksPerHour;
+    const total = totalPerGuestOverride ?? c.drinksPerGuest;
     const option = adLibitumOptions.find((o) => o.hours === adLib.hours) ?? adLibitumOptions[0];
     const pop = population(scenario);
 
@@ -132,11 +130,20 @@ export function adLibitumCost(scenario: Scenario, ratePerHourOverride?: number):
 
     const lines: CostLine[] = [];
 
+    // Spell out that the package is charged per head, not per drinker — otherwise
+    // the price looks unresponsive when the drinking assumptions change.
     const packageCost = packageHeads * option.price;
+    const nonDrinkersOnPackage = adLib.coverage === "all" ? pop.soberAdults + pop.children : 0;
     lines.push({
         id: "package",
         label: `Ad libitum i ${option.hours} timer`,
-        detail: `${formatNumber(packageHeads, 1)} betalende × ${formatDKK(option.price)}${adLib.coverage === "drinkers_only" ? " (kun drikkende)" : ""}`,
+        detail:
+            adLib.coverage === "drinkers_only"
+                ? `${formatNumber(packageHeads, 1)} drikkende × ${formatDKK(option.price)}`
+                : `${formatNumber(packageHeads, 1)} betalende × ${formatDKK(option.price)}` +
+                  (nonDrinkersOnPackage >= 0.5
+                      ? ` — heraf ${formatNumber(nonDrinkersOnPackage, 0)} der ikke drikker alkohol`
+                      : ""),
         amount: packageCost,
     });
 
@@ -153,27 +160,27 @@ export function adLibitumCost(scenario: Scenario, ratePerHourOverride?: number):
 
     // Guests left off the package still drink soft drinks all evening.
     const uncoveredSoftGuests = adLib.coverage === "all" ? 0 : pop.soberAdults + pop.children;
-    const uncoveredSoft = softDrinkCost(uncoveredSoftGuests, scenario.partyHours, c);
+    const uncoveredSoft = softDrinkCostInWindow(scenario, uncoveredSoftGuests, 0, scenario.partyHours);
     if (uncoveredSoft > 0) {
         lines.push({
             id: "uncovered_soft",
             label: "Sodavand til gæster uden pakke",
-            detail: `${formatNumber(uncoveredSoftGuests, 0)} gæster × ${formatNumber(c.softDrinksPerHour)} /time × ${scenario.partyHours} t`,
+            detail: `${formatNumber(uncoveredSoftGuests, 0)} gæster × ${formatNumber(c.softDrinksPerGuest, 1)} sodavand`,
             amount: uncoveredSoft,
         });
     }
 
-    // Hours past the end of the package are billed per drink. Because the
-    // profile front-loads drinking, these late hours are cheaper than the
-    // average rate would imply.
+    // Hours past the end of the package are billed per drink. Because drinking
+    // is front-loaded, these late hours hold fewer drinks than an even split.
     let overflow = 0;
     if (overflowHours > 0) {
-        const overflowUnits = alcoholUnitsInWindow(scenario, rate, packageHours, scenario.partyHours);
+        const overflowUnits = alcoholUnitsInWindow(scenario, total, packageHours, scenario.partyHours);
         const overflowAlcohol = overflowUnits * averageAlcoholPrice(c, spiritsServed);
-        const overflowSoft = softDrinkCost(
+        const overflowSoft = softDrinkCostInWindow(
+            scenario,
             adLib.coverage === "all" ? pop.soberAdults + pop.children : 0,
-            overflowHours,
-            c,
+            packageHours,
+            scenario.partyHours,
         );
         overflow = overflowAlcohol + overflowSoft;
         lines.push({
@@ -184,25 +191,25 @@ export function adLibitumCost(scenario: Scenario, ratePerHourOverride?: number):
         });
     }
 
-    const alcoholUnits = alcoholUnitsInWindow(scenario, rate, 0, scenario.partyHours);
-    const total = packageCost + spiritsCost + uncoveredSoft + overflow;
+    const alcoholUnits = alcoholUnitsInWindow(scenario, total, 0, scenario.partyHours);
+    const grandTotal = packageCost + spiritsCost + uncoveredSoft + overflow;
 
     return {
-        total,
+        total: grandTotal,
         lines,
         alcoholUnits,
-        pricePerDrink: alcoholUnits > 0 ? total / alcoholUnits : null,
+        pricePerDrink: alcoholUnits > 0 ? grandTotal / alcoholUnits : null,
     };
 }
 
 /**
- * The drinks-per-drinker-per-hour rate where both models cost the same.
+ * Drinks per drinking guest at which both models cost the same.
  *
- * Both cost functions are affine in the rate, so we sample each at two points
+ * Both cost functions are affine in that total, so we sample each at two points
  * and solve the resulting linear equation. Sampling (rather than deriving the
  * coefficients by hand) keeps this exactly consistent with the functions above.
  */
-export function breakEvenRate(scenario: Scenario): number | null {
+export function breakEvenDrinksPerGuest(scenario: Scenario): number | null {
     const c0 = consumptionCost(scenario, 0).total;
     const c1 = consumptionCost(scenario, 1).total;
     const a0 = adLibitumCost(scenario, 0).total;
@@ -211,6 +218,6 @@ export function breakEvenRate(scenario: Scenario): number | null {
     const denominator = c1 - c0 - (a1 - a0);
     if (Math.abs(denominator) < 1e-9) return null;
 
-    const rate = (a0 - c0) / denominator;
-    return rate > 0 && Number.isFinite(rate) ? rate : null;
+    const drinks = (a0 - c0) / denominator;
+    return drinks > 0 && Number.isFinite(drinks) ? drinks : null;
 }

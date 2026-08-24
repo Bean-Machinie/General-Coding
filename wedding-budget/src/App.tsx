@@ -68,9 +68,13 @@ export default function App() {
     );
     const cheapestId = allTotals.slice().sort((a, b) => a.total - b.total)[0]?.id;
 
+    // On desktop the page itself doesn't scroll: the header keeps its height and
+    // each column below owns its own scrollbar, so the summary can be scrolled
+    // without moving the configurator. Below `lg` this collapses back to a
+    // normal single-scroll page.
     return (
-        <div className="min-h-screen bg-secondary pb-16">
-            <header className="sticky top-0 z-20 border-b border-secondary bg-primary/95 backdrop-blur">
+        <div className="flex min-h-screen flex-col bg-secondary pb-16 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:pb-0">
+            <header className="sticky top-0 z-20 shrink-0 border-b border-secondary bg-primary/95 backdrop-blur">
                 <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
                     <div className="min-w-0 flex-1">
                         <h1 className="truncate text-lg font-semibold text-primary">
@@ -155,8 +159,10 @@ export default function App() {
                 </div>
             </header>
 
-            <main className="mx-auto grid max-w-[1600px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-                <div className="flex flex-col gap-6">
+            <main className="mx-auto grid w-full max-w-[1600px] gap-6 px-4 py-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_400px] lg:overflow-hidden lg:pb-0">
+                {/* Block layout, not flex: as a height-constrained scroll pane a
+                    flex column would shrink the sections instead of overflowing. */}
+                <div className="space-y-6 lg:min-h-0 lg:overflow-y-auto lg:pr-3 lg:pb-6">
                     <div className="rounded-xl bg-primary p-5 shadow-xs ring-1 ring-secondary">
                         <Input
                             label="Navn på scenarie"
@@ -179,7 +185,7 @@ export default function App() {
                     <p className="px-1 text-xs text-tertiary">{venueInfo.disclaimer}</p>
                 </div>
 
-                <div className="lg:sticky lg:top-36 lg:self-start">
+                <div className="lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-6">
                     <Summary scenario={active} estimate={estimate} onChange={update} />
                 </div>
             </main>

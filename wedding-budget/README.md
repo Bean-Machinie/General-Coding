@@ -40,26 +40,32 @@ one is feeding the budget.
 
 ### Step 1 — how much the guests drink (shared by both models)
 
-Four presets, taken from published wedding-bar planning guidance rather than
-guesswork. Sources are cited in `src/data/consumption-presets.ts`.
+Assumptions are expressed as **totals per guest for the whole party**, not as a
+rate per hour. Sources are cited in `src/data/consumption-presets.ts`.
 
-| Preset | Rate | Basis |
+| Preset | Genstande/gæst | Basis |
 | --- | --- | --- |
-| Roligt selskab | 0,8/t | Many driving home, older crowd |
-| Branchestandard | 1,0/t | The Knot / Zola: one drink per guest per hour, ~5–6 across the night |
-| Dansk bryllupsfest | 1,4/t | Wine through several courses, dancing late — the default |
-| Tørstige gæster | 2,0/t | Young crowd, bar until late |
+| Roligt selskab | 5 | Many driving home, older crowd |
+| Internationalt | 6 | The Knot / Zola: 1 drink per guest per hour, ~5–6 across a reception |
+| **Dansk branchestandard** | **9** | Kokken & Jomfruen: 1½ hvidvin + 2½ rødvin + 1 dessertvin + 4 øl — the default |
+| Tørstige gæster | 12 | Young crowd, bar until late |
 
-Danish wedding guides quote per-course figures instead (~1–2 glasses welcome, 2
-white, 3 red, 1–2 dessert, ~2 beers), summing to 17–21 drinks per guest. Those
-are *purchasing* guides — buy enough of each type that nothing runs out — not
-consumption. Converted to actual drinking across a 6–7 hour wedding they land
-near the 1,4/hour the Danish preset uses.
+Soft drinks default to 3 per non-drinking guest, and the 45/55 beer/wine split
+comes from the same source (4 beers against 5 glasses of wine).
 
-**Tempo** switches between an even spread and the classic "2 drinks in the first
-hour, then 1 per hour". It never changes the total number of drinks, only when
-they are drunk — which matters, because drinks consumed after the ad libitum
-package expires are billed per glass.
+**Why totals rather than a rate.** Danish trade guidance is written per guest per
+course, not per hour. A per-hour rate multiplied by party length is the wrong
+shape for it: it makes an 8-hour wedding imply ~11 drinks a head purely because
+the party runs long, when the trade figures say ~9 regardless. Party length now
+only decides *when* drinks are poured, never how many — stretching a party from
+6 to 10 hours leaves the efter-forbrug bill completely unchanged, and only moves
+ad libitum (because more hours fall outside the package).
+
+Within the party, drinking is front-loaded on the standard "2 drinks in the
+first hour, then 1 per hour" rule. That is fixed rather than configurable: it
+only shifts *when* drinks happen, never the total, so it is invisible unless an
+ad libitum package expires early — where it correctly makes the leftover hours
+cheaper than an even split would suggest.
 
 **Spiritus** is asked once, as a fact about the party, because each model prices
 it differently: ad libitum charges 95 kr/person/hour for the whole package,
@@ -84,9 +90,9 @@ beer/wine/soft here while on an ad libitum package is flagged in amber — the
 package already covers those, so you would pay twice. The sparkling wines
 (Moscato, Cremant, Brachetto) are genuinely extra and are not flagged.
 
-**Break-even** — the chart plots both models against drinks-per-drinker-per-hour
-and marks the rate where they cost the same. Both cost functions are affine in
-that rate, so the crossing point is solved exactly (by sampling each function at
+**Break-even** — the chart plots both models against drinks per drinking guest
+and marks the point where they cost the same. Both cost functions are affine in
+that total, so the crossing point is solved exactly (by sampling each function at
 two points, so it can't drift out of sync with the functions themselves).
 
 ## Assumptions worth checking with the venue
