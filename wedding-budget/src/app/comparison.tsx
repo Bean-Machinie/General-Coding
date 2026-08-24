@@ -98,6 +98,7 @@ export const Comparison = ({ scenario, estimate, onChange }: Props) => {
 
     return (
         <Section
+            accent="compare"
             title="Hvornår betaler ad libitum sig?"
             description="Samme fest, to måder at betale for øl og vin på."
             action={

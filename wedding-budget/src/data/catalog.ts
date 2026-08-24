@@ -25,6 +25,11 @@ export interface CatalogItem {
     altLabel?: string;
     note?: string;
     highlighted?: boolean;
+    /**
+     * True when an ad libitum package (øl, vin og læske) would already cover
+     * this drink, so ordering it separately double-pays.
+     */
+    coveredByAdLibitum?: boolean;
 }
 
 export interface CatalogGroup {
@@ -171,7 +176,7 @@ export const welcomeDrinksGroup: CatalogGroup = {
     selection: "quantity",
     note: "Angiv hvor mange glas pr. gæst der skal serveres.",
     items: [
-        { id: "hvidvin_hyldeblomst", name: "Hvidvin med hyldeblomst", price: 75, unit: "per_unit" },
+        { id: "hvidvin_hyldeblomst", name: "Hvidvin med hyldeblomst", price: 75, unit: "per_unit", coveredByAdLibitum: true },
         {
             id: "moscato",
             name: "La Spinetta, Moscato d'Asti (velkomst eller dessert)",
@@ -186,8 +191,8 @@ export const welcomeDrinksGroup: CatalogGroup = {
             price: 85,
             unit: "per_unit",
         },
-        { id: "cider_alkoholfri", name: "Cider alkoholfri — hindbær, fersken eller granatæble", price: 70, unit: "per_unit" },
-        { id: "hejren", name: "Hejren (hvedeøl med hyldeblomst)", price: 70, unit: "per_unit" },
+        { id: "cider_alkoholfri", name: "Cider alkoholfri — hindbær, fersken eller granatæble", price: 70, unit: "per_unit", coveredByAdLibitum: true },
+        { id: "hejren", name: "Hejren (hvedeøl med hyldeblomst)", price: 70, unit: "per_unit", coveredByAdLibitum: true },
     ],
 };
 

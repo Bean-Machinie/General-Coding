@@ -1,4 +1,5 @@
 import type { ItemId } from "@/data/catalog";
+import type { ConsumptionProfile } from "@/data/consumption-presets";
 
 export type DrinkMode = "adlibitum" | "consumption";
 
@@ -21,8 +22,6 @@ export interface GuestCounts {
 export interface AdLibConfig {
     /** Package length in hours, matching one of `adLibitumOptions`. */
     hours: number;
-    /** Add spirits (vodka, gin, rom) to the package. */
-    spirits: boolean;
     coverage: AdLibCoverage;
 }
 
@@ -36,6 +35,10 @@ export interface ConsumptionConfig {
     wineType: WineType;
     /** Soft drinks per non-drinking guest per hour. */
     softDrinksPerHour: number;
+    /** How the drinking is spread across the evening. */
+    profile: ConsumptionProfile;
+    /** Of the alcoholic drinks, the share that are spirits/cocktails. */
+    spiritsShare: number;
     /** Settle by the glass or by the bottle. */
     priceBasis: PriceBasis;
     glassesPerBottleWine: number;
@@ -44,6 +47,12 @@ export interface ConsumptionConfig {
 
 export interface DrinksConfig {
     mode: DrinkMode;
+    /**
+     * Whether spirits are served at all. A party-level decision, priced
+     * differently by each model: ad libitum charges a per-person-per-hour
+     * surcharge, efter forbrug charges per drink poured.
+     */
+    spiritsServed: boolean;
     adLib: AdLibConfig;
     consumption: ConsumptionConfig;
     /** Bottles brought from home, charged corkage. */

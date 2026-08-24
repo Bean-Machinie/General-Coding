@@ -1,3 +1,4 @@
+import { Check, InfoCircle } from "@untitledui/icons";
 import {
     CORKAGE_PER_BOTTLE,
     SPIRITS_SURCHARGE_PER_HOUR,
@@ -5,8 +6,10 @@ import {
     consumptionPrices,
     welcomeDrinksGroup,
 } from "@/data/catalog";
+import { consumptionPresets, consumptionProfiles } from "@/data/consumption-presets";
+import type { ConsumptionProfile } from "@/data/consumption-presets";
 import type { DrinkCostBreakdown, Estimate, Scenario, WineType } from "@/domain/types";
-import { blendedDrinkPrice, formatDKK, formatNumber } from "@/domain/pricing";
+import { averageAlcoholPrice, formatDKK, formatNumber } from "@/domain/pricing";
 import { Badge } from "@/components/base/badges/badges";
 import { ButtonGroup, ButtonGroupItem } from "@/components/base/button-group/button-group";
 import { InputNumber } from "@/components/base/input/input-number";
@@ -34,26 +37,19 @@ const StepHeading = ({
     step,
     title,
     description,
-    badge,
 }: {
     step: number;
     title: string;
     description: string;
-    badge?: string;
 }) => (
-    <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-solid text-xs font-semibold text-white">
+    <div className="mb-3 flex items-start gap-3">
+        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-solid text-xs font-semibold text-white">
             {step}
         </span>
         <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-primary">{title}</p>
             <p className="text-xs text-tertiary">{description}</p>
         </div>
-        {badge && (
-            <Badge type="pill-color" color="gray" size="sm">
-                {badge}
-            </Badge>
-        )}
     </div>
 );
 
@@ -93,7 +89,6 @@ const LabelledSlider = ({
     </div>
 );
 
-/** The cost lines that make up one model's price. */
 const CostLines = ({ cost }: { cost: DrinkCostBreakdown }) => (
     <ul className="space-y-1.5">
         {cost.lines.map((line) => (
@@ -110,6 +105,53 @@ const CostLines = ({ cost }: { cost: DrinkCostBreakdown }) => (
     </ul>
 );
 
+/** Declared at module scope so the radio inside isn't remounted on every render. */
+const ModelHeader = ({
+    id,
+    title,
+    subtitle,
+    cost,
+    chosen,
+    isCheapest,
+}: {
+    id: "adlibitum" | "consumption";
+    title: string;
+    subtitle: string;
+    cost: DrinkCostBreakdown;
+    chosen: boolean;
+    isCheapest: boolean;
+}) => (
+    <div className={cx("border-b border-secondary px-4 py-3", chosen && "bg-brand-primary")}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+            <RadioButton value={id} size="md" label={title} />
+            {chosen ? (
+                <Badge type="pill-color" color="brand" size="sm">
+                    Med i budgettet
+                </Badge>
+            ) : (
+                <Badge type="pill-color" color="gray" size="sm">
+                    Sammenligning
+                </Badge>
+            )}
+        </div>
+        <p className="mt-1 text-xs text-tertiary">{subtitle}</p>
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="text-3xl font-semibold text-primary tabular-nums">{formatDKK(cost.total)}</p>
+            {isCheapest && (
+                <Badge type="pill-color" color="success" size="sm">
+                    Billigst
+                </Badge>
+            )}
+        </div>
+        {cost.pricePerDrink !== null && (
+            <p className="mt-0.5 text-sm text-tertiary">
+                {formatDKK(cost.pricePerDrink)} pr. genstand · {formatNumber(cost.alcoholUnits, 0)}{" "}
+                genstande i alt
+            </p>
+        )}
+    </div>
+);
+
 export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: Props) => {
     const { drinks } = scenario;
     const { consumption: c, adLib } = drinks;
@@ -121,56 +163,20 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
     const patchAdLib = (patch: Partial<typeof adLib>) => patchDrinks({ adLib: { ...adLib, ...patch } });
 
     const drinkers = Math.round(scenario.guests.adults * c.drinkerShare);
-    const unitPrice = blendedDrinkPrice(c);
+    const unitPrice = averageAlcoholPrice(c, drinks.spiritsServed);
     const cheaper = estimate.adLibSaving > 0 ? "adlibitum" : "consumption";
+    const drinksPerGuest = c.drinksPerHour * scenario.partyHours;
 
-    /** Header shared by both model cards. */
-    const ModelHeader = ({
-        id,
-        title,
-        cost,
-    }: {
-        id: "adlibitum" | "consumption";
-        title: string;
-        cost: DrinkCostBreakdown;
-    }) => {
-        const chosen = drinks.mode === id;
-        return (
-            <div className="border-b border-secondary px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <RadioButton value={id} size="md" label={title} />
-                    {chosen ? (
-                        <Badge type="pill-color" color="brand" size="sm">
-                            Med i budgettet
-                        </Badge>
-                    ) : (
-                        <Badge type="pill-color" color="gray" size="sm">
-                            Kun til sammenligning
-                        </Badge>
-                    )}
-                </div>
-                <p className="mt-2 text-3xl font-semibold text-primary tabular-nums">
-                    {formatDKK(cost.total)}
-                </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-tertiary">
-                    {cost.pricePerDrink !== null && (
-                        <span>
-                            {formatDKK(cost.pricePerDrink)} pr. genstand ·{" "}
-                            {formatNumber(cost.alcoholUnits, 0)} genstande
-                        </span>
-                    )}
-                    {cheaper === id && (
-                        <Badge type="pill-color" color="success" size="sm">
-                            Billigst
-                        </Badge>
-                    )}
-                </p>
-            </div>
-        );
-    };
+    const activePreset = consumptionPresets.find(
+        (p) =>
+            Math.abs(p.drinksPerHour - c.drinksPerHour) < 0.01 &&
+            Math.abs(p.drinkerShare - c.drinkerShare) < 0.01 &&
+            Math.abs(p.beerShare - c.beerShare) < 0.01,
+    );
 
     return (
         <Section
+            accent="drinks"
             title="Drikkevarer"
             description="Vælg hvordan I betaler for øl og vin. Begge modeller regnes ud hele tiden, så I kan se forskellen."
         >
@@ -179,54 +185,147 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                 <StepHeading
                     step={1}
                     title="Hvor meget drikker gæsterne?"
-                    description="Jeres bedste gæt. Det er kun et skøn — leg med det."
-                    badge="Bruges i begge modeller"
+                    description="Start med et udgangspunkt, og finjustér bagefter. Gælder begge modeller."
                 />
 
-                <LabelledSlider
-                    label="Andel af voksne der drikker alkohol"
-                    display={`${Math.round(c.drinkerShare * 100)} % · ${drinkers} pers.`}
-                    value={Math.round(c.drinkerShare * 100)}
-                    min={0}
-                    max={100}
-                    step={5}
-                    onChange={(v) => patchConsumption({ drinkerShare: v / 100 })}
-                />
+                <div className="flex flex-wrap gap-2">
+                    {consumptionPresets.map((preset) => {
+                        const isActive = activePreset?.id === preset.id;
+                        return (
+                            <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() =>
+                                    patchConsumption({
+                                        drinksPerHour: preset.drinksPerHour,
+                                        drinkerShare: preset.drinkerShare,
+                                        beerShare: preset.beerShare,
+                                    })
+                                }
+                                title={preset.hint}
+                                className={cx(
+                                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ring-1 transition-colors",
+                                    isActive
+                                        ? "bg-brand-solid text-white ring-transparent"
+                                        : "bg-primary text-secondary ring-secondary hover:bg-secondary",
+                                )}
+                            >
+                                {isActive && <Check className="size-3.5" />}
+                                {preset.label}
+                                <span className={cx("tabular-nums", isActive ? "text-white" : "text-tertiary")}>
+                                    {formatNumber(preset.drinksPerHour)}/t
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
 
-                <LabelledSlider
-                    label="Genstande pr. drikkende gæst pr. time"
-                    hint="1,5 er et normalt bryllupsgennemsnit over hele aftenen."
-                    display={`${formatNumber(c.drinksPerHour)} /time`}
-                    value={c.drinksPerHour}
-                    min={0}
-                    max={5}
-                    step={0.1}
-                    onChange={(v) => patchConsumption({ drinksPerHour: v })}
-                />
+                <p className="mt-2 flex items-start gap-1.5 text-xs text-tertiary">
+                    <InfoCircle className="mt-0.5 size-3.5 shrink-0" />
+                    <span>
+                        {activePreset
+                            ? activePreset.hint
+                            : "Egne indstillinger — tryk på et udgangspunkt for at nulstille."}
+                    </span>
+                </p>
 
-                <LabelledSlider
-                    label="Fordeling øl / vin"
-                    hint={`Giver en gennemsnitspris på ${formatDKK(unitPrice)} pr. genstand`}
-                    display={`${Math.round(c.beerShare * 100)} % øl · ${100 - Math.round(c.beerShare * 100)} % vin`}
-                    value={Math.round(c.beerShare * 100)}
-                    min={0}
-                    max={100}
-                    step={5}
-                    onChange={(v) => patchConsumption({ beerShare: v / 100 })}
-                />
+                <div className="mt-4 border-t border-secondary pt-2">
+                    <LabelledSlider
+                        label="Genstande pr. drikkende gæst pr. time"
+                        hint={`Svarer til ${formatNumber(drinksPerGuest, 1)} genstande hver over ${scenario.partyHours} timer.`}
+                        display={`${formatNumber(c.drinksPerHour)} /time`}
+                        value={c.drinksPerHour}
+                        min={0}
+                        max={4}
+                        step={0.1}
+                        onChange={(v) => patchConsumption({ drinksPerHour: v })}
+                    />
 
-                <LabelledSlider
-                    label="Sodavand pr. ikke-drikkende gæst pr. time"
-                    hint={`${formatDKK(consumptionPrices.soda.glass)} pr. sodavand. Postevand er gratis med lokalelejen.`}
-                    display={`${formatNumber(c.softDrinksPerHour)} /time`}
-                    value={c.softDrinksPerHour}
-                    min={0}
-                    max={4}
-                    step={0.25}
-                    onChange={(v) => patchConsumption({ softDrinksPerHour: v })}
-                />
+                    <LabelledSlider
+                        label="Andel af voksne der drikker alkohol"
+                        hint="Resten får sodavand — gravide, chauffører og afholdende."
+                        display={`${Math.round(c.drinkerShare * 100)} % · ${drinkers} pers.`}
+                        value={Math.round(c.drinkerShare * 100)}
+                        min={0}
+                        max={100}
+                        step={5}
+                        onChange={(v) => patchConsumption({ drinkerShare: v / 100 })}
+                    />
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <LabelledSlider
+                        label="Fordeling øl / vin"
+                        display={`${Math.round(c.beerShare * 100)} % øl · ${100 - Math.round(c.beerShare * 100)} % vin`}
+                        value={Math.round(c.beerShare * 100)}
+                        min={0}
+                        max={100}
+                        step={5}
+                        onChange={(v) => patchConsumption({ beerShare: v / 100 })}
+                    />
+
+                    <LabelledSlider
+                        label="Sodavand pr. ikke-drikkende gæst pr. time"
+                        hint={`${formatDKK(consumptionPrices.soda.glass)} pr. sodavand. Postevand er gratis med lokalelejen.`}
+                        display={`${formatNumber(c.softDrinksPerHour)} /time`}
+                        value={c.softDrinksPerHour}
+                        min={0}
+                        max={4}
+                        step={0.25}
+                        onChange={(v) => patchConsumption({ softDrinksPerHour: v })}
+                    />
+                </div>
+
+                <div className="mt-4 border-t border-secondary pt-3">
+                    <p className="mb-1.5 text-sm font-medium text-secondary">Tempo hen over aftenen</p>
+                    <ButtonGroup
+                        selectedKeys={[c.profile]}
+                        selectionMode="single"
+                        onSelectionChange={(keys) => {
+                            const next = [...keys][0];
+                            if (next === "even" || next === "frontloaded")
+                                patchConsumption({ profile: next as ConsumptionProfile });
+                        }}
+                        className="w-full"
+                    >
+                        {consumptionProfiles.map((p) => (
+                            <ButtonGroupItem key={p.id} id={p.id} className="flex-1 justify-center">
+                                {p.label}
+                            </ButtonGroupItem>
+                        ))}
+                    </ButtonGroup>
+                    <p className="mt-1.5 text-xs text-tertiary">
+                        {consumptionProfiles.find((p) => p.id === c.profile)?.hint} Ændrer ikke det
+                        samlede antal genstande — kun hvornår de drikkes, hvilket betyder noget når
+                        ad libitum-pakken udløber før festen.
+                    </p>
+                </div>
+
+                {/* Spirits: one party-level decision, priced differently by each model. */}
+                <div className="mt-4 border-t border-secondary pt-2">
+                    <FieldRow
+                        label="Serveres der spiritus og drinks?"
+                        hint={`Vælges én gang. Ad libitum: ${formatDKK(SPIRITS_SURCHARGE_PER_HOUR)}/person/time. Efter forbrug: ${formatDKK(consumptionPrices.cocktail.glass)} pr. drink.`}
+                    >
+                        <Toggle
+                            isSelected={drinks.spiritsServed}
+                            onChange={(v) => patchDrinks({ spiritsServed: v })}
+                            size="md"
+                        />
+                    </FieldRow>
+                    {drinks.spiritsServed && (
+                        <LabelledSlider
+                            label="Hvor stor en del af genstandene er drinks?"
+                            hint={`Gennemsnitsprisen pr. genstand bliver ${formatDKK(unitPrice)}.`}
+                            display={`${Math.round(c.spiritsShare * 100)} %`}
+                            value={Math.round(c.spiritsShare * 100)}
+                            min={0}
+                            max={60}
+                            step={5}
+                            onChange={(v) => patchConsumption({ spiritsShare: v / 100 })}
+                        />
+                    )}
+                </div>
+
+                <div className="mt-4 grid gap-4 border-t border-secondary pt-3 sm:grid-cols-2">
                     <Select
                         label="Hvilken husvin?"
                         selectedKey={c.wineType}
@@ -287,7 +386,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                 <StepHeading
                     step={2}
                     title="Vælg betalingsmodel"
-                    description="Prik den model af, der skal tælle med i budgettet. Den anden bliver stående, så I kan sammenligne."
+                    description="Prik den model af, der skal tælle med i budgettet. Den anden bliver stående til sammenligning."
                 />
 
                 <RadioGroup
@@ -302,21 +401,26 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                         {/* ---------------- Ad libitum ---------------- */}
                         <div
                             className={cx(
-                                "overflow-hidden rounded-xl ring-1",
+                                "overflow-hidden rounded-xl",
                                 drinks.mode === "adlibitum"
                                     ? "bg-primary ring-2 ring-brand"
-                                    : "bg-secondary ring-secondary",
+                                    : "bg-secondary ring-1 ring-secondary",
                             )}
                         >
-                            <ModelHeader id="adlibitum" title="Ad libitum" cost={estimate.adLib} />
+                            <ModelHeader
+                                id="adlibitum"
+                                title="Ad libitum"
+                                subtitle="Fast pris pr. person — fri bar i et antal timer"
+                                cost={estimate.adLib}
+                                chosen={drinks.mode === "adlibitum"}
+                                isCheapest={cheaper === "adlibitum"}
+                            />
 
                             <div className="space-y-4 px-4 py-3">
                                 <CostLines cost={estimate.adLib} />
 
                                 <div className="border-t border-secondary pt-3">
-                                    <p className="text-sm font-medium text-secondary">
-                                        Pakkens længde
-                                    </p>
+                                    <p className="text-sm font-medium text-secondary">Pakkens længde</p>
                                     <p className="mb-2 text-xs text-tertiary">
                                         Er pakken kortere end festen, betales de sidste timer efter
                                         forbrug oveni.
@@ -332,6 +436,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                                 adLib.coverage === "all"
                                                     ? billableGuests
                                                     : scenario.guests.adults * c.drinkerShare;
+                                            const covers = option.hours >= scenario.partyHours;
                                             return (
                                                 <RadioButton
                                                     key={option.hours}
@@ -339,46 +444,24 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                                     size="md"
                                                     label={
                                                         <span className="flex flex-wrap items-center gap-x-2">
-                                                            <span>{option.hours} t</span>
+                                                            <span>{option.hours} timer</span>
                                                             <span className="text-sm text-tertiary">
                                                                 {formatDKK(option.price)}/pers.
                                                             </span>
                                                             <span className="text-sm font-medium text-brand-secondary">
                                                                 = {formatDKK(option.price * heads)}
                                                             </span>
-                                                            {option.highlighted && (
-                                                                <Badge
-                                                                    type="pill-color"
-                                                                    color="brand"
-                                                                    size="sm"
-                                                                >
-                                                                    Markeret
-                                                                </Badge>
-                                                            )}
                                                         </span>
                                                     }
                                                     hint={
-                                                        option.hours < scenario.partyHours
-                                                            ? `Dækker ${option.hours} af ${scenario.partyHours} timer`
-                                                            : "Dækker hele festen"
+                                                        covers
+                                                            ? "Dækker hele festen"
+                                                            : `Dækker kun ${option.hours} af ${scenario.partyHours} timer`
                                                     }
                                                 />
                                             );
                                         })}
                                     </RadioGroup>
-                                </div>
-
-                                <div className="border-t border-secondary pt-1">
-                                    <FieldRow
-                                        label="Tillæg for spiritus"
-                                        hint={`Vodka, gin, rom — ${formatDKK(SPIRITS_SURCHARGE_PER_HOUR)} pr. person pr. time`}
-                                    >
-                                        <Toggle
-                                            isSelected={adLib.spirits}
-                                            onChange={(v) => patchAdLib({ spirits: v })}
-                                            size="md"
-                                        />
-                                    </FieldRow>
                                 </div>
 
                                 <div className="border-t border-secondary pt-3">
@@ -413,16 +496,19 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                         {/* ---------------- Efter forbrug ---------------- */}
                         <div
                             className={cx(
-                                "overflow-hidden rounded-xl ring-1",
+                                "overflow-hidden rounded-xl",
                                 drinks.mode === "consumption"
                                     ? "bg-primary ring-2 ring-brand"
-                                    : "bg-secondary ring-secondary",
+                                    : "bg-secondary ring-1 ring-secondary",
                             )}
                         >
                             <ModelHeader
                                 id="consumption"
                                 title="Efter forbrug"
+                                subtitle="I betaler kun for det der faktisk bliver drukket"
                                 cost={estimate.consumption}
+                                chosen={drinks.mode === "consumption"}
+                                isCheapest={cheaper === "consumption"}
                             />
 
                             <div className="space-y-4 px-4 py-3">
@@ -430,24 +516,22 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
 
                                 <div className="border-t border-secondary pt-3">
                                     <p className="text-sm font-medium text-secondary">
-                                        Der er ikke mere at indstille her
+                                        Ingen ekstra indstillinger
                                     </p>
                                     <p className="mt-1 text-xs text-tertiary">
-                                        Prisen falder direkte ud af antagelserne i trin 1 og festens
-                                        længde ({scenario.partyHours} timer). Skru på skyderne
-                                        ovenfor for at se den ændre sig.
+                                        Prisen kommer direkte fra trin 1 og festens længde (
+                                        {scenario.partyHours} timer). Skru på skyderne ovenfor for at
+                                        se den ændre sig.
                                     </p>
                                 </div>
 
                                 <div className="rounded-lg bg-secondary p-3">
-                                    <p className="text-xs font-medium text-secondary">
-                                        Sådan regnes den
-                                    </p>
+                                    <p className="text-xs font-medium text-secondary">Sådan regnes den</p>
                                     <ul className="mt-1 space-y-1 text-xs text-tertiary">
                                         <li>
-                                            {drinkers} drikkende × {formatNumber(c.drinksPerHour)}{" "}
-                                            genstand/time × {scenario.partyHours} t ×{" "}
-                                            {formatDKK(unitPrice)}
+                                            {drinkers} drikkende × {formatNumber(drinksPerGuest, 1)}{" "}
+                                            genstande hver ={" "}
+                                            {formatNumber(estimate.consumption.alcoholUnits, 0)} genstande
                                         </li>
                                         <li>
                                             + sodavand til de{" "}
@@ -457,7 +541,7 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                                             )}{" "}
                                             der ikke drikker alkohol
                                         </li>
-                                        <li>Ingen fast pakkepris — I betaler kun det der drikkes.</li>
+                                        <li>Ingen fast pakkepris — intet spild hvis der drikkes lidt.</li>
                                     </ul>
                                 </div>
                             </div>
@@ -471,54 +555,61 @@ export const DrinksSection = ({ scenario, estimate, billableGuests, onChange }: 
                 <StepHeading
                     step={3}
                     title="Lægges oveni uanset model"
-                    description="Velkomstdrinks er ikke en del af ad libitum — de bestilles og betales separat."
+                    description="Angiv antal glas pr. gæst. 1 betyder ét glas til hver."
                 />
 
-                <div className="flex flex-col divide-y divide-secondary rounded-xl bg-secondary px-4">
+                <div className="flex flex-col divide-y divide-secondary overflow-hidden rounded-xl bg-secondary">
                     {welcomeDrinksGroup.items.map((item) => {
                         const qty = scenario.quantities[item.id] ?? 0;
+                        // Ordering plain beer/wine/soft alongside ad libitum double-pays.
+                        const overlaps =
+                            drinks.mode === "adlibitum" && Boolean(item.coveredByAdLibitum) && qty > 0;
                         return (
-                            <FieldRow
-                                key={item.id}
-                                label={item.name}
-                                hint={`${formatDKK(item.price)} pr. glas${qty > 0 ? ` · i alt ${formatDKK(qty * billableGuests * item.price)}` : ""}${item.highlighted ? " · markeret" : ""}`}
-                            >
-                                <InputNumber
-                                    aria-label={`Glas pr. gæst af ${item.name}`}
-                                    minValue={0}
-                                    maxValue={10}
-                                    step={0.5}
-                                    value={qty}
-                                    onChange={(v) =>
-                                        onChange({
-                                            quantities: {
-                                                ...scenario.quantities,
-                                                [item.id]: Number.isNaN(v) ? 0 : v,
-                                            },
-                                        })
+                            <div key={item.id} className={cx("px-4", overlaps && "bg-warning-primary")}>
+                                <FieldRow
+                                    label={item.name}
+                                    hint={
+                                        overlaps
+                                            ? "Øl/vin/læske — ad libitum-pakken dækker den allerede. I betaler dobbelt."
+                                            : `${formatDKK(item.price)} pr. glas${qty > 0 ? ` · i alt ${formatDKK(qty * billableGuests * item.price)}` : ""}${item.highlighted ? " · markeret på prislisten" : ""}`
                                     }
-                                    className="w-32"
-                                />
-                            </FieldRow>
+                                >
+                                    <InputNumber
+                                        aria-label={`Glas pr. gæst af ${item.name}`}
+                                        minValue={0}
+                                        maxValue={10}
+                                        step={0.5}
+                                        value={qty}
+                                        onChange={(v) =>
+                                            onChange({
+                                                quantities: {
+                                                    ...scenario.quantities,
+                                                    [item.id]: Number.isNaN(v) ? 0 : v,
+                                                },
+                                            })
+                                        }
+                                        className="w-32"
+                                    />
+                                </FieldRow>
+                            </div>
                         );
                     })}
 
-                    <FieldRow
-                        label="Medbragt vin"
-                        hint={`Proppenge ${formatDKK(CORKAGE_PER_BOTTLE)} pr. flaske`}
-                    >
-                        <InputNumber
-                            aria-label="Antal medbragte flasker"
-                            minValue={0}
-                            value={drinks.ownWineBottles}
-                            onChange={(v) => patchDrinks({ ownWineBottles: Number.isNaN(v) ? 0 : v })}
-                            className="w-32"
-                        />
-                    </FieldRow>
+                    <div className="px-4">
+                        <FieldRow
+                            label="Medbragt vin"
+                            hint={`Proppenge ${formatDKK(CORKAGE_PER_BOTTLE)} pr. flaske`}
+                        >
+                            <InputNumber
+                                aria-label="Antal medbragte flasker"
+                                minValue={0}
+                                value={drinks.ownWineBottles}
+                                onChange={(v) => patchDrinks({ ownWineBottles: Number.isNaN(v) ? 0 : v })}
+                                className="w-32"
+                            />
+                        </FieldRow>
+                    </div>
                 </div>
-                <p className="mt-2 px-1 text-xs text-tertiary">
-                    Antal glas er <strong>pr. gæst</strong> — 1 betyder ét glas til hver.
-                </p>
             </div>
         </Section>
     );

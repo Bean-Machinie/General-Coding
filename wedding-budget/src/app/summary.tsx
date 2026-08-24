@@ -6,6 +6,7 @@ import { Gauge, GaugeIndicator, GaugeRange, GaugeTrack, GaugeValueText } from "@
 import { Stat, StatDescription, StatLabel, StatValue } from "@/components/ui/stat";
 import { InputNumber } from "@/components/base/input/input-number";
 import { cx } from "@/utils/cx";
+import { ACCENTS } from "./accents";
 
 interface Props {
     scenario: Scenario;
@@ -13,17 +14,19 @@ interface Props {
     onChange: (patch: Partial<Scenario>) => void;
 }
 
+/** Budget-slice colours. Venue/drinks/food reuse the section accents so a
+    section header and its slice of the budget read as the same thing. */
 const CATEGORY_COLORS: Record<string, string> = {
-    venue: "var(--color-utility-blue-500)",
-    main_meal: "var(--color-brand-600)",
-    reception: "var(--color-utility-purple-500)",
-    snacks: "var(--color-utility-amber-500)",
+    venue: ACCENTS.venue,
+    drinks: ACCENTS.drinks,
+    main_meal: ACCENTS.food,
+    reception: "var(--color-utility-amber-500)",
+    snacks: "var(--color-utility-yellow-500)",
     sweets: "var(--color-utility-pink-500)",
-    natmad: "var(--color-utility-orange-500)",
-    drinks: "var(--color-utility-success-500)",
+    natmad: "var(--color-utility-purple-500)",
 };
 
-const colorFor = (id: string) => CATEGORY_COLORS[id] ?? "var(--color-utility-gray-500)";
+const colorFor = (id: string) => CATEGORY_COLORS[id] ?? "var(--color-utility-neutral-500)";
 
 export const Summary = ({ scenario, estimate, onChange }: Props) => {
     const [expanded, setExpanded] = useState<string | null>(null);

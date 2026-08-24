@@ -94,6 +94,7 @@ export const FoodSection = ({ scenario, billableGuests, onChange }: Props) => {
 
     return (
         <Section
+            accent="food"
             title="Mad"
             description="Priserne er pr. betalende gæst — børn 2–12 år tæller som en halv."
         >

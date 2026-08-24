@@ -21,6 +21,7 @@ export const PartySection = ({ scenario, headcount, onChange }: Props) => {
 
     return (
         <Section
+            accent="venue"
             title="Selskabet"
             description={`${headcount} personer i alt · ${scenario.partyHours} timers fest`}
         >
