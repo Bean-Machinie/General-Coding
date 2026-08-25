@@ -1,5 +1,12 @@
 import { jsPDF } from "jspdf";
-import { adLibitumOptions, venueInfo, venueOptions } from "@/data/catalog";
+import { adLibitumOptions, consumptionPrices, venueInfo, venueOptions } from "@/data/catalog";
+import { drinksInWindow, effectiveDrinksPerGuest } from "@/data/consumption-presets";
+import {
+    blendedDrinkPrice,
+    population,
+    standardDrinksInBeerPitcher,
+    standardDrinksInWineBottle,
+} from "@/domain/drinks";
 import { adLibitumCost, consumptionCost } from "@/domain/pricing";
 import type { CostCategory, Estimate, Scenario } from "@/domain/types";
 
@@ -575,156 +582,312 @@ function drawCostDetails(doc: jsPDF, estimate: Estimate) {
     // avoids a sparse total-only continuation page for compact scenarios.
 }
 
-function drawGuestCard(doc: jsPDF, scenario: Scenario, estimate: Estimate, y: number) {
-    const width = PAGE.width - PAGE.margin * 2;
-    card(doc, PAGE.margin, y, width, 46, { accent: COLORS.blue });
-    text(doc, "Selskabet", PAGE.margin + 5, y + 11, { size: 9.5, color: COLORS.primary, weight: "bold" });
-    text(doc, `${estimate.headcount} personer i alt · ${formatNumber(scenario.partyHours)} timers fest`, PAGE.margin + 5, y + 17, {
-        size: 6.8,
-        color: COLORS.tertiary,
-    });
-
-    const values = [
-        ["Voksne", scenario.guests.adults, "Fuld pris"],
-        ["Børn 2-12 år", scenario.guests.children, "Halv pris"],
-        ["Børn under 2 år", scenario.guests.toddlers, "Gratis uden opdækning"],
-    ] as const;
-    const fieldWidth = (width - 20) / 3;
-    values.forEach(([label, value, hint], index) => {
-        const x = PAGE.margin + 5 + index * (fieldWidth + 5);
-        text(doc, label, x, y + 25, { size: 6.8, color: COLORS.secondary, weight: "bold" });
-        setFill(doc, COLORS.card);
-        setDraw(doc, COLORS.border);
-        doc.roundedRect(x, y + 28, fieldWidth, 9, 1.5, 1.5, "FD");
-        text(doc, String(value), x + 3, y + 34, { size: 8, color: COLORS.primary });
-        text(doc, hint, x, y + 42, { size: 6.2, color: COLORS.tertiary });
-    });
+function assumptionMetric(
+    doc: jsPDF,
+    x: number,
+    y: number,
+    width: number,
+    label: string,
+    value: string,
+    detail: string,
+) {
+    setFill(doc, COLORS.muted);
+    setDraw(doc, COLORS.border);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, y, width, 15, 1.8, 1.8, "FD");
+    text(doc, label.toUpperCase(), x + 3, y + 4.2, { size: 5.2, color: COLORS.tertiary, weight: "bold" });
+    text(doc, value, x + 3, y + 9.7, { size: 8.5, color: COLORS.primary, weight: "bold" });
+    text(doc, detail, x + 3, y + 13.5, { size: 5.1, color: COLORS.tertiary, maxWidth: width - 6 });
 }
 
-function drawDrinkComparison(doc: jsPDF, scenario: Scenario, estimate: Estimate, y: number) {
-    const width = PAGE.width - PAGE.margin * 2;
-    card(doc, PAGE.margin, y, width, 76, { accent: COLORS.emerald });
-    text(doc, "Drikkevarer", PAGE.margin + 5, y + 11, { size: 9.5, color: COLORS.primary, weight: "bold" });
-    text(doc, "Samme fest, to måder at betale for øl og vin på.", PAGE.margin + 5, y + 17, {
-        size: 6.8,
-        color: COLORS.tertiary,
-    });
+function assumptionBadge(doc: jsPDF, label: string, y: number, fill: PdfColor, color: PdfColor) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.7);
+    const width = doc.getTextWidth(label) + 6;
+    badge(doc, label, PAGE.width - PAGE.margin - 5 - width, y, fill, color);
+}
 
-    const gap = 5;
-    const innerWidth = (width - 15) / 2;
-    const models = [
-        {
-            mode: "adlibitum",
-            title: "Ad libitum",
-            amount: estimate.adLib.total,
-            detail: `${formatNumber(scenario.drinks.adLib.hours)} timers pakke`,
-        },
-        {
-            mode: "consumption",
-            title: "Efter forbrug",
-            amount: estimate.consumption.total,
-            detail: `${formatNumber(scenario.drinks.consumption.drinksPerGuest)} genstande pr. drikkende`,
-        },
-    ];
-    models.forEach((model, index) => {
-        const selected = scenario.drinks.mode === model.mode;
-        const x = PAGE.margin + 5 + index * (innerWidth + gap);
-        card(doc, x, y + 22, innerWidth, 38, {
-            fill: selected ? COLORS.brandSoft : COLORS.card,
-            border: selected ? [214, 187, 251] : COLORS.border,
-            radius: 2.3,
-        });
-        text(doc, model.title, x + 4, y + 31, { size: 8.2, color: COLORS.primary, weight: "bold" });
-        badge(
-            doc,
-            selected ? "MED I BUDGETTET" : "SAMMENLIGNING",
-            x + innerWidth - (selected ? 31 : 29),
-            y + 26,
-            selected ? [233, 215, 254] : COLORS.muted,
-            selected ? COLORS.brand : COLORS.tertiary,
-        );
-        text(doc, formatCurrency(model.amount), x + 4, y + 43, {
-            size: 13,
-            color: COLORS.primary,
-            weight: "bold",
-        });
-        text(doc, `${formatCurrency(model.amount / Math.max(1, estimate.billableGuests))} pr. betalende`, x + 4, y + 50, {
-            size: 6.5,
-            color: COLORS.tertiary,
-        });
-        text(doc, model.detail, x + 4, y + 56, { size: 6.5, color: COLORS.tertiary });
-    });
-
-    const saving = Math.abs(estimate.adLibSaving);
-    const cheapest = estimate.adLibSaving >= 0 ? "Ad libitum" : "Efter forbrug";
-    text(doc, `${cheapest} er billigst med ${formatCurrency(saving)}`, PAGE.margin + 5, y + 69, {
-        size: 7.5,
-        color: COLORS.success,
-        weight: "bold",
-    });
+function consumptionStageRow(
+    doc: jsPDF,
+    label: string,
+    perDrinker: number,
+    groupUnits: number,
+    share: number,
+    y: number,
+) {
+    const x = PAGE.margin + 5;
+    const barX = x + 33;
+    const barWidth = 66;
+    text(doc, label, x, y + 2.6, { size: 5.8, color: COLORS.secondary, weight: "bold" });
+    setFill(doc, COLORS.muted);
+    doc.roundedRect(barX, y, barWidth, 3, 1.5, 1.5, "F");
+    setFill(doc, COLORS.brand);
+    doc.roundedRect(barX, y, Math.max(0.8, barWidth * share), 3, 1.5, 1.5, "F");
     text(
         doc,
-        estimate.breakEvenDrinksPerGuest === null
-            ? "Intet relevant balancepunkt"
-            : `Balancepunkt ${formatNumber(estimate.breakEvenDrinksPerGuest)} genstande pr. drikkende`,
+        `${formatNumber(perDrinker)} pr. drikkende · ${formatNumber(groupUnits, 0)} i alt · ${formatPercent(share * 100)}`,
         PAGE.width - PAGE.margin - 5,
-        y + 69,
-        { size: 6.8, color: COLORS.tertiary, align: "right" },
+        y + 2.6,
+        { size: 5.6, color: COLORS.secondary, align: "right" },
     );
-}
-
-function drawNotes(doc: jsPDF, estimate: Estimate, y: number) {
-    const width = PAGE.width - PAGE.margin * 2;
-    const shown = estimate.warnings.slice(0, 3);
-    if (shown.length === 0) return 0;
-
-    const height = 17 + shown.length * 6.5;
-    card(doc, PAGE.margin, y, width, height, { fill: COLORS.warningSoft, border: [254, 223, 137] });
-    text(doc, "Ting at være opmærksom på", PAGE.margin + 5, y + 9, {
-        size: 8,
-        color: COLORS.warning,
-        weight: "bold",
-    });
-    shown.forEach((warning, index) => {
-        text(doc, `•  ${wrap(doc, warning, width - 15).slice(0, 1).join("")}`, PAGE.margin + 6, y + 16 + index * 6.5, {
-            size: 6.6,
-            color: COLORS.warning,
-        });
-    });
-    return height;
 }
 
 function drawAssumptionsPage(doc: jsPDF, scenario: Scenario, estimate: Estimate) {
     appHeader(doc, estimate);
-    pageTitle(doc, "Forudsætninger & sammenligning", "Det aktive scenarie samlet i en beslutningsklar oversigt");
-    drawGuestCard(doc, scenario, estimate, 55);
-    drawDrinkComparison(doc, scenario, estimate, 107);
-    const notesHeight = drawNotes(doc, estimate, 189);
-    const infoY = notesHeight > 0 ? 195 + notesHeight : 189;
+    pageTitle(
+        doc,
+        "Forbrugsmodel: antagelser & beregning",
+        "Efter forbrug - alle inputs, mellemregninger og kilder",
+    );
+
     const width = PAGE.width - PAGE.margin * 2;
-    card(doc, PAGE.margin, infoY, width, 38);
-    text(doc, "Om estimatet", PAGE.margin + 5, infoY + 10, {
-        size: 8.5,
+    const c = scenario.drinks.consumption;
+    const pop = population(scenario);
+    const effectivePerDrinker = effectiveDrinksPerGuest(c.drinksPerGuest, scenario.partyHours);
+    const totalAlcoholUnits = pop.drinkers * effectivePerDrinker;
+    const beerUnits = totalAlcoholUnits * c.beerShare;
+    const wineUnits = totalAlcoholUnits - beerUnits;
+    const softGuests = pop.soberAdults + pop.children;
+    const effectiveSoftPerGuest = effectiveDrinksPerGuest(c.softDrinksPerGuest, scenario.partyHours);
+    const softUnits = softGuests * effectiveSoftPerGuest;
+    const wine = consumptionPrices[c.wineType];
+    const beerPitcherUnits = standardDrinksInBeerPitcher();
+    const wineBottleUnits = standardDrinksInWineBottle(c.wineType);
+    const beerPitcherUnitPrice = consumptionPrices.beer.pitcher / beerPitcherUnits;
+    const wineBottleUnitPrice = wine.bottle / wineBottleUnits;
+    const containerBlend = c.beerShare * beerPitcherUnitPrice + (1 - c.beerShare) * wineBottleUnitPrice;
+    const glassBlend = c.beerShare * consumptionPrices.beer.glass + (1 - c.beerShare) * wine.glass;
+    const chosenUnitPrice = blendedDrinkPrice(c);
+    const alcoholCost = totalAlcoholUnits * chosenUnitPrice;
+    const softCost = softUnits * consumptionPrices.soda.glass;
+    const containerSaving = glassBlend - containerBlend;
+    const containerSavingPercent = glassBlend > 0 ? containerSaving / glassBlend : 0;
+    const fivePointUnits = scenario.guests.adults * 0.05 * effectivePerDrinker;
+    const priceBasisLabel = c.priceBasis === "bottle" ? "Kander & flasker" : "Individuelle glas";
+
+    // 1. Population: who is actually included in the alcohol calculation.
+    const populationY = 55;
+    card(doc, PAGE.margin, populationY, width, 41, { accent: COLORS.blue });
+    text(doc, "1. Hvem regnes som drikkende?", PAGE.margin + 5, populationY + 10, {
+        size: 9,
         color: COLORS.primary,
         weight: "bold",
     });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.8);
+    assumptionBadge(doc, "SCENARIEINPUT", populationY + 5, [239, 248, 255], COLORS.comparisonBlue);
     text(
         doc,
-        wrap(
-            doc,
-            "Beløbene følger gæstetal, menuvalg og drikkeantagelser i det aktive scenarie. Dokumentet er et planlægningsværktøj og ikke et bindende tilbud.",
-            width - 10,
-        ).join("\n"),
+        `${formatNumber(scenario.guests.adults, 0)} voksne × ${formatPercent(c.drinkerShare * 100)} = ${formatNumber(pop.drinkers)} drikkende. Resten regnes som sodavandsgæster sammen med børnene.`,
         PAGE.margin + 5,
-        infoY + 18,
-        { size: 6.8, color: COLORS.secondary },
+        populationY + 16.5,
+        { size: 6.2, color: COLORS.secondary },
     );
-    text(doc, venueInfo.disclaimer, PAGE.margin + 5, infoY + 32, {
-        size: 6.2,
+    const populationMetricWidth = (width - 20) / 3;
+    assumptionMetric(
+        doc,
+        PAGE.margin + 5,
+        populationY + 20,
+        populationMetricWidth,
+        "Voksne i alt",
+        formatNumber(scenario.guests.adults, 0),
+        "Grundpopulation for alkohol",
+    );
+    assumptionMetric(
+        doc,
+        PAGE.margin + 10 + populationMetricWidth,
+        populationY + 20,
+        populationMetricWidth,
+        "Drikkende voksne",
+        `${formatNumber(pop.drinkers)} (${formatPercent(c.drinkerShare * 100)})`,
+        `±5 %-point = ±${formatNumber(fivePointUnits, 0)} genstande`,
+    );
+    assumptionMetric(
+        doc,
+        PAGE.margin + 15 + populationMetricWidth * 2,
+        populationY + 20,
+        populationMetricWidth,
+        "Sodavandsgæster",
+        formatNumber(softGuests),
+        `${formatNumber(pop.soberAdults)} voksne + ${formatNumber(pop.children, 0)} børn`,
+    );
+
+    // 2. Quantity and time profile: sourced benchmark vs explicit model assumptions.
+    const volumeY = 101;
+    card(doc, PAGE.margin, volumeY, width, 70, { accent: COLORS.brand });
+    text(doc, "2. Mængde og fordeling gennem aftenen", PAGE.margin + 5, volumeY + 10, {
+        size: 9,
+        color: COLORS.primary,
+        weight: "bold",
+    });
+    assumptionBadge(doc, "KILDE + MODELFORDELING", volumeY + 5, COLORS.brandSoft, COLORS.brand);
+    text(
+        doc,
+        "Kokken & Jomfruen angiver ca. 9 øl/vin-serveringer pr. gæst: 1,5 hvidvin + 2,5 rødvin + 1 dessertvin + 4 øl.",
+        PAGE.margin + 5,
+        volumeY + 16.5,
+        { size: 5.9, color: COLORS.secondary },
+    );
+    text(
+        doc,
+        `Modellen anvender jeres valgte ${formatNumber(c.drinksPerGuest)} på den drikkende del af de voksne og skalerer til ${formatNumber(scenario.partyHours)} timers fest.`,
+        PAGE.margin + 5,
+        volumeY + 21.5,
+        { size: 5.9, color: COLORS.secondary },
+    );
+    const volumeMetricWidth = (width - 20) / 3;
+    assumptionMetric(
+        doc,
+        PAGE.margin + 5,
+        volumeY + 25,
+        volumeMetricWidth,
+        "Valgt 6-timers grundtal",
+        `${formatNumber(c.drinksPerGuest)} pr. drikkende`,
+        "Justerbart scenarieinput",
+    );
+    assumptionMetric(
+        doc,
+        PAGE.margin + 10 + volumeMetricWidth,
+        volumeY + 25,
+        volumeMetricWidth,
+        `Effektivt ved ${formatNumber(scenario.partyHours)} timer`,
+        `${formatNumber(effectivePerDrinker)} pr. drikkende`,
+        "Skaleret med tidsprofilen",
+    );
+    assumptionMetric(
+        doc,
+        PAGE.margin + 15 + volumeMetricWidth * 2,
+        volumeY + 25,
+        volumeMetricWidth,
+        "Alkohol i alt",
+        `${formatNumber(totalAlcoholUnits, 0)} genstande`,
+        `${formatNumber(beerUnits, 0)} øl · ${formatNumber(wineUnits, 0)} vin`,
+    );
+
+    const stages = [
+        { label: "0-1 t · ankomst", from: 0, to: Math.min(1, scenario.partyHours) },
+        { label: "1-6 t · middag", from: 1, to: Math.min(6, scenario.partyHours) },
+        { label: `6-${formatNumber(scenario.partyHours)} t · sen fest`, from: 6, to: scenario.partyHours },
+    ].filter((stage) => stage.to > stage.from);
+    stages.forEach((stage, index) => {
+        const perDrinker = drinksInWindow(effectivePerDrinker, scenario.partyHours, stage.from, stage.to);
+        const groupUnits = perDrinker * pop.drinkers;
+        const share = totalAlcoholUnits > 0 ? groupUnits / totalAlcoholUnits : 0;
+        consumptionStageRow(doc, stage.label, perDrinker, groupUnits, share, volumeY + 44 + index * 7.5);
+    });
+    text(
+        doc,
+        "Tidsvægte: 2x i første time, 1x i time 1-6 og 0,5x derefter. Dette er en modelantagelse - ikke en ekstern norm.",
+        PAGE.margin + 5,
+        volumeY + 66,
+        { size: 5.3, color: COLORS.tertiary },
+    );
+
+    // 3. Unit economics and exact arithmetic through to the consumption total.
+    const priceY = 176;
+    card(doc, PAGE.margin, priceY, width, 76, { accent: COLORS.emerald });
+    text(doc, "3. Prisgrundlag og det fulde efter-forbrug-regnestykke", PAGE.margin + 5, priceY + 10, {
+        size: 9,
+        color: COLORS.primary,
+        weight: "bold",
+    });
+    assumptionBadge(doc, "SKOVLYST PRISLISTE", priceY + 5, COLORS.successSoft, COLORS.success);
+    const dividerX = PAGE.margin + width / 2;
+    setDraw(doc, COLORS.border);
+    doc.setLineWidth(0.2);
+    doc.line(dividerX, priceY + 15, dividerX, priceY + 68);
+
+    const leftX = PAGE.margin + 5;
+    const rightX = dividerX + 5;
+    text(doc, "Enhedspriser", leftX, priceY + 18, { size: 7, color: COLORS.secondary, weight: "bold" });
+    text(doc, "Mellemregning", rightX, priceY + 18, { size: 7, color: COLORS.secondary, weight: "bold" });
+    const unitRows = [
+        `Ølkande: ${formatCurrency(consumptionPrices.beer.pitcher)} / ${formatNumber(beerPitcherUnits)} = ${formatCurrency(beerPitcherUnitPrice)} pr. genstand`,
+        `Vinflaske: ${formatCurrency(wine.bottle)} / ${formatNumber(wineBottleUnits)} = ${formatCurrency(wineBottleUnitPrice)} pr. genstand`,
+        `Kande/flaske-mix (${formatPercent(c.beerShare * 100)} / ${formatPercent((1 - c.beerShare) * 100)}): ${formatCurrency(containerBlend)}`,
+        `Samme mix købt pr. glas: ${formatCurrency(glassBlend)}`,
+    ];
+    unitRows.forEach((row, index) => {
+        text(doc, row, leftX, priceY + 25 + index * 7, { size: 5.9, color: COLORS.secondary });
+    });
+    text(
+        doc,
+        `Kander/flasker sparer ${formatCurrency(containerSaving)} pr. genstand (${formatPercent(containerSavingPercent * 100)}) mod glas.`,
+        leftX,
+        priceY + 55,
+        { size: 6.1, color: COLORS.success, weight: "bold" },
+    );
+    text(doc, `Valgt prisgrundlag: ${priceBasisLabel}`, leftX, priceY + 62, {
+        size: 5.8,
+        color: COLORS.primary,
+        weight: "bold",
+    });
+    text(doc, "Kande/flaske omregnes til danske standardgenstande á 12 g alkohol.", leftX, priceY + 68, {
+        size: 5.1,
         color: COLORS.tertiary,
-        maxWidth: width - 10,
+    });
+
+    const formulaRows = [
+        `${formatNumber(pop.drinkers)} drikkende × ${formatNumber(effectivePerDrinker)} = ${formatNumber(totalAlcoholUnits, 0)} genstande`,
+        `${formatNumber(totalAlcoholUnits, 0)} × ${formatCurrency(chosenUnitPrice)} = ${formatCurrency(alcoholCost)} øl/vin`,
+        `${formatNumber(softGuests)} sodavandsgæster × ${formatNumber(effectiveSoftPerGuest)} × ${formatCurrency(consumptionPrices.soda.glass)} = ${formatCurrency(softCost)}`,
+    ];
+    formulaRows.forEach((row, index) => {
+        text(doc, row, rightX, priceY + 25 + index * 8, { size: 6.2, color: COLORS.secondary });
+    });
+    setFill(doc, COLORS.successSoft);
+    doc.roundedRect(rightX, priceY + 51, width / 2 - 10, 13, 2, 2, "F");
+    text(doc, "EFTER FORBRUG I ALT", rightX + 3, priceY + 56, {
+        size: 5.4,
+        color: COLORS.success,
+        weight: "bold",
+    });
+    text(doc, formatCurrency(estimate.consumption.total), PAGE.width - PAGE.margin - 8, priceY + 60.5, {
+        size: 11,
+        color: COLORS.primary,
+        weight: "bold",
+        align: "right",
+    });
+    text(
+        doc,
+        `Kontrol: ${formatCurrency(alcoholCost)} + ${formatCurrency(softCost)} = ${formatCurrency(alcoholCost + softCost)}`,
+        rightX,
+        priceY + 69,
+        { size: 5.2, color: COLORS.tertiary },
+    );
+
+    // Sources and, critically, what is not externally sourced.
+    const sourcesY = 257;
+    card(doc, PAGE.margin, sourcesY, width, 21);
+    text(doc, "Kilder & antagelsesstatus", PAGE.margin + 5, sourcesY + 6.5, {
+        size: 6.7,
+        color: COLORS.primary,
+        weight: "bold",
+    });
+    text(
+        doc,
+        "[1] Kokken & Jomfruen: 1,5 hvid + 2,5 rød + 1 dessertvin + 4 øl + 3 sodavand pr. gæst.",
+        PAGE.margin + 5,
+        sourcesY + 11,
+        { size: 5.2, color: COLORS.secondary },
+    );
+    doc.link(PAGE.margin + 5, sourcesY + 7.5, 115, 4, {
+        url: "https://www.kokken-jomfruen.dk/inspiration/generelt-om-drikkevarerne-til-en-fest/",
+    });
+    text(
+        doc,
+        "[2] Bryggeri Skovlyst, selskabsprisliste 1/1-2026: kande-, flaske-, glas- og sodavandspriser.",
+        PAGE.margin + 5,
+        sourcesY + 15.3,
+        { size: 5.2, color: COLORS.secondary },
+    );
+    text(
+        doc,
+        `[3] Sundhedsstyrelsen: 1 genstand = 12 g alkohol. [4] ${formatPercent(c.drinkerShare * 100)} drikkende og tidsprofilen er modelinput - ikke ekstern norm.`,
+        PAGE.margin + 5,
+        sourcesY + 19.5,
+        { size: 5.2, color: COLORS.secondary },
+    );
+    doc.link(PAGE.margin + 5, sourcesY + 16, 55, 4, {
+        url: "https://www.sst.dk/vidensbase/forebyggelse/alkohol/anbefalinger-om-alkohol",
     });
 }
 
