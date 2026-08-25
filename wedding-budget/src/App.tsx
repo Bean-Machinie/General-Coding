@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy01, Moon01, Plus, Sun, Trash01 } from "@untitledui/icons";
+import { Copy01, FileDownload01, Moon01, Plus, Sun, Trash01 } from "@untitledui/icons";
 import { venueInfo } from "@/data/catalog";
 import { createDefaultScenario, loadState, saveState } from "@/domain/defaults";
 import { billableGuests, estimate as computeEstimate, formatDKK, headcount } from "@/domain/pricing";
@@ -24,6 +24,7 @@ export default function App() {
         return saved?.activeId ?? scenarios[0].id;
     });
     const [darkMode, setDarkMode] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     const active = scenarios.find((s) => s.id === activeId) ?? scenarios[0];
 
@@ -68,6 +69,20 @@ export default function App() {
     );
     const cheapestId = allTotals.slice().sort((a, b) => a.total - b.total)[0]?.id;
 
+    const extractPdf = async () => {
+        setIsExporting(true);
+        try {
+            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+            const { exportWeddingBudgetPdf } = await import("@/lib/pdf-export");
+            exportWeddingBudgetPdf({ scenario: active, estimate, comparisons: allTotals });
+        } catch (error) {
+            console.error("PDF export failed", error);
+            window.alert("PDF'en kunne ikke oprettes. Prøv igen.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     // On desktop the page itself doesn't scroll: the header keeps its height and
     // each column below owns its own scrollbar, so the summary can be scrolled
     // without moving the configurator. Below `lg` this collapses back to a
@@ -92,6 +107,17 @@ export default function App() {
                                 {formatDKK(estimate.total)}
                             </p>
                         </div>
+                        <Button
+                            size="md"
+                            color="primary"
+                            iconLeading={FileDownload01}
+                            isLoading={isExporting}
+                            showTextWhileLoading
+                            onClick={extractPdf}
+                            aria-label="Udtræk et detaljeret budgetoverblik som PDF"
+                        >
+                            {isExporting ? "Opretter PDF" : "Udtræk PDF"}
+                        </Button>
                         <Button
                             size="md"
                             color="tertiary"
